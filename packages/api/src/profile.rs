@@ -1,0 +1,60 @@
+use crate::types::Profile;
+use dioxus::prelude::*;
+
+#[dioxus::prelude::post("/api/profile/upsert")]
+pub async fn upsert_profile(
+    id_token: String,
+    display_name: String,
+    bio: String,
+    avatar_url: Option<String>,
+    location: Option<String>,
+) -> Result<Profile, ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = (id_token, display_name, bio, avatar_url, location);
+        Err(ServerFnError::new("upsert_profile is server-only"))
+    }
+
+    #[cfg(feature = "server")]
+    {
+        use sqlx::Row;
+        use time::OffsetDateTime;
+
+        let user_id = crate::auth::require_user_id(id_token).await?;
+        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let row = sqlx::query(
+            r#"
+            insert into profiles (user_id, display_name, bio, avatar_url, location, updated_at)
+            values ($1, $2, $3, $4, $5, now())
+            on conflict (user_id)
+            do update set
+                display_name = excluded.display_name,
+                bio = excluded.bio,
+                avatar_url = excluded.avatar_url,
+                location = excluded.location,
+                updated_at = now()
+            returning user_id, display_name, bio, avatar_url, location, updated_at
+            "#,
+        )
+        .bind(user_id)
+        .bind(&display_name)
+        .bind(&bio)
+        .bind(&avatar_url)
+        .bind(&location)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        Ok(Profile {
+            user_id: row.get("user_id"),
+            display_name: row.get("display_name"),
+            bio: row.get("bio"),
+            avatar_url: row.get("avatar_url"),
+            location: row.get("location"),
+            updated_at: row.get::<OffsetDateTime, _>("updated_at"),
+        })
+    }
+}
+
+

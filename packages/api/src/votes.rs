@@ -1,0 +1,100 @@
+use crate::types::{ContentTargetType, VoteState};
+use dioxus::prelude::*;
+
+/// Set a vote on any content.
+///
+/// - `value = 1` upvote
+/// - `value = -1` downvote
+/// - `value = 0` clears vote
+#[dioxus::prelude::post("/api/votes/set")]
+pub async fn set_vote(
+    id_token: String,
+    target_type: ContentTargetType,
+    target_id: String,
+    value: i16,
+) -> Result<VoteState, ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = (id_token, target_type, target_id, value);
+        Err(ServerFnError::new("set_vote is server-only"))
+    }
+
+    #[cfg(feature = "server")]
+    {
+        use uuid::Uuid;
+
+        let user_id = crate::auth::require_user_id(id_token).await?;
+        let tid = Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
+        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        if value == 0 {
+            sqlx::query(
+                "delete from votes where user_id = $1 and target_type = $2 and target_id = $3",
+            )
+            .bind(user_id)
+            .bind(target_type.as_db())
+            .bind(tid)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        } else if value == 1 || value == -1 {
+            sqlx::query(
+                r#"
+                insert into votes (user_id, target_type, target_id, value)
+                values ($1, $2, $3, $4)
+                on conflict (user_id, target_type, target_id)
+                do update set value = excluded.value, updated_at = now()
+                "#,
+            )
+            .bind(user_id)
+            .bind(target_type.as_db())
+            .bind(tid)
+            .bind(value)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+            // Activity log (best-effort)
+            let action = if value == 1 { "voted_up" } else { "voted_down" };
+            let _ = sqlx::query(
+                "insert into activity (user_id, action, target_type, target_id) values ($1, $2, $3, $4)",
+            )
+            .bind(user_id)
+            .bind(action)
+            .bind(target_type.as_db())
+            .bind(tid)
+            .execute(pool)
+            .await;
+        } else {
+            return Err(ServerFnError::new("value must be -1, 0, or 1"));
+        }
+
+        let score: i64 = sqlx::query_scalar(
+            "select coalesce(sum(value), 0) from votes where target_type = $1 and target_id = $2",
+        )
+        .bind(target_type.as_db())
+        .bind(tid)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let my_vote: Option<i16> = sqlx::query_scalar(
+            "select value from votes where user_id = $1 and target_type = $2 and target_id = $3",
+        )
+        .bind(user_id)
+        .bind(target_type.as_db())
+        .bind(tid)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        Ok(VoteState {
+            target_type,
+            target_id: tid,
+            score,
+            my_vote,
+        })
+    }
+}
+
+

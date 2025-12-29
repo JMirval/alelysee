@@ -1,0 +1,48 @@
+/* Uses vars from theme.css: --civic-* */
+
+.auth_signin, .auth_callback, .auth_gate {
+  max-width: 640px;
+  margin: 24px auto;
+  padding: 20px;
+  background: var(--civic-panel);
+  border: 1px solid var(--civic-border);
+  border-radius: 14px;
+  color: var(--civic-text);
+  animation: civic_in 240ms ease both;
+}
+
+.auth_signin h1, .auth_callback h1, .auth_gate h2 {
+  margin: 0 0 10px 0;
+}
+
+.hint { color: var(--civic-muted); }
+.error { color: var(--civic-danger); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--civic-border);
+  background: transparent;
+  color: var(--civic-text);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: var(--civic-primary);
+  border-color: rgba(0,0,0,0.2);
+  color: #071018;
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .auth_signin, .auth_callback, .auth_gate {
+    margin: 12px;
+    padding: 16px;
+  }
+  .btn { width: 100%; }
+}
+

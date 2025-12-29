@@ -1,23 +1,24 @@
 use dioxus::prelude::*;
 
 const HERO_CSS: Asset = asset!("/assets/styling/hero.css");
-const HEADER_SVG: Asset = asset!("/assets/header.svg");
 
 #[component]
 pub fn Hero() -> Element {
+    let lang = crate::use_lang()();
     rsx! {
         document::Link { rel: "stylesheet", href: HERO_CSS }
 
         div {
             id: "hero",
-            img { src: HEADER_SVG, id: "header" }
             div { id: "links",
-                a { href: "https://dioxuslabs.com/learn/0.7/", "📚 Learn Dioxus" }
-                a { href: "https://dioxuslabs.com/awesome", "🚀 Awesome Dioxus" }
-                a { href: "https://github.com/dioxus-community/", "📡 Community Libraries" }
-                a { href: "https://github.com/DioxusLabs/sdk", "⚙️ Dioxus Development Kit" }
-                a { href: "https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus", "💫 VSCode Extension" }
-                a { href: "https://discord.gg/XgGxMSkvUM", "👋 Community Discord" }
+                h1 { {crate::t(lang, "app.name")} }
+                p { {crate::t(lang, "home.subtitle")} }
+
+                div { class: "cta_row",
+                    a { class: "btn primary", href: "/proposals", {crate::t(lang, "home.cta.proposals")} }
+                    a { class: "btn", href: "/programs", {crate::t(lang, "home.cta.programs")} }
+                }
+                p { class: "hint", {crate::t(lang, "home.tip")} }
             }
         }
     }
