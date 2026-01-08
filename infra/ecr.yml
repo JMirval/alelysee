@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ECR repository for Heliastes
+
+Parameters:
+  AppName:
+    Type: String
+    Default: heliastes
+  Environment:
+    Type: String
+    Default: prod
+
+Resources:
+  AppRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${AppName}-${Environment}"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      Tags:
+        - Key: Application
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  RepositoryName:
+    Value: !Ref AppRepository
+  RepositoryUri:
+    Value: !GetAtt AppRepository.RepositoryUri

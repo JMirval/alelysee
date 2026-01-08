@@ -2,7 +2,10 @@ use crate::types::ActivityItem;
 use dioxus::prelude::*;
 
 #[dioxus::prelude::get("/api/activity/me")]
-pub async fn list_my_activity(id_token: String, limit: i64) -> Result<Vec<ActivityItem>, ServerFnError> {
+pub async fn list_my_activity(
+    id_token: String,
+    limit: i64,
+) -> Result<Vec<ActivityItem>, ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
         let _ = (id_token, limit);
@@ -17,7 +20,9 @@ pub async fn list_my_activity(id_token: String, limit: i64) -> Result<Vec<Activi
         use uuid::Uuid;
 
         let user_id = crate::auth::require_user_id(id_token).await?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let rows = sqlx::query(
             r#"
@@ -73,5 +78,3 @@ pub async fn list_my_activity(id_token: String, limit: i64) -> Result<Vec<Activi
             .collect())
     }
 }
-
-

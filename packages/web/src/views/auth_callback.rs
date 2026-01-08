@@ -4,5 +4,3 @@ use dioxus::prelude::*;
 pub fn AuthCallback() -> Element {
     rsx! { ui::AuthCallback {} }
 }
-
-

@@ -17,6 +17,7 @@ mod server {
     use time::OffsetDateTime;
 
     #[derive(Debug, Deserialize)]
+    #[allow(dead_code)]
     struct Claims {
         sub: String,
         iss: String,
@@ -91,7 +92,9 @@ mod server {
     }
 
     pub async fn ensure_user_for_sub(cognito_sub: &str) -> Result<User, ServerFnError> {
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // Try fetch existing
         if let Some(row) = sqlx::query("select id, created_at from users where cognito_sub = $1")
@@ -106,13 +109,12 @@ mod server {
         }
 
         // Create
-        let row = sqlx::query(
-            "insert into users (cognito_sub) values ($1) returning id, created_at",
-        )
-        .bind(cognito_sub)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let row =
+            sqlx::query("insert into users (cognito_sub) values ($1) returning id, created_at")
+                .bind(cognito_sub)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         Ok(User {
             id: row.get("id"),
@@ -121,7 +123,9 @@ mod server {
     }
 
     pub async fn get_profile_for_user(user_id: Uuid) -> Result<Option<Profile>, ServerFnError> {
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let row = sqlx::query(
             "select user_id, display_name, bio, avatar_url, location, updated_at from profiles where user_id = $1",
@@ -158,8 +162,8 @@ pub struct Me {
 }
 
 pub async fn public_config() -> Result<PublicConfig, ServerFnError> {
-    let cognito_domain =
-        std::env::var("COGNITO_DOMAIN").map_err(|_| ServerFnError::new("COGNITO_DOMAIN not set"))?;
+    let cognito_domain = std::env::var("COGNITO_DOMAIN")
+        .map_err(|_| ServerFnError::new("COGNITO_DOMAIN not set"))?;
     let cognito_client_id = std::env::var("COGNITO_APP_CLIENT_ID")
         .map_err(|_| ServerFnError::new("COGNITO_APP_CLIENT_ID not set"))?;
     let cognito_redirect_uri = std::env::var("COGNITO_REDIRECT_URI")
@@ -220,5 +224,3 @@ pub async fn require_user_id(id_token: String) -> Result<Uuid, ServerFnError> {
         Ok(user.id)
     }
 }
-
-

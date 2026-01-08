@@ -1,6 +1,6 @@
 # AWS Deployment (Heliastes)
 
-This project is a Dioxus 0.7 **fullstack** workspace (web/desktop/mobile clients + shared `api` server functions). For production we host the server on AWS and use RDS (Postgres), Cognito (auth), and S3 + CloudFront (videos).
+This project is a Dioxus 0.7 **fullstack** workspace (web/desktop/mobile clients + shared `api` server functions). For production we host the server on AWS and use RDS (Postgres), Cognito (auth), and S3 + CloudFront (videos). Deployment is managed via CloudFormation and GitHub Actions (see `AWS_RUNBOOK.md`).
 
 ## Components
 - **Compute**: ECS Fargate service behind an ALB
@@ -11,7 +11,7 @@ This project is a Dioxus 0.7 **fullstack** workspace (web/desktop/mobile clients
 - **Secrets/Config**: Secrets Manager / SSM Parameter Store + task env vars
 
 ## Required environment variables
-Copy `[env.example](/Users/dode/Documents/rust/heliastes/env.example)` into your runtime environment (Secrets Manager recommended).
+Copy `[env.example](/Users/dode/Documents/rust/alelysee/env.example)` into your runtime environment (Secrets Manager recommended).
 
 - `DATABASE_URL` (RDS)
 - `COGNITO_REGION`
@@ -67,9 +67,9 @@ The app uses an OAuth **implicit flow** redirect for MVP (token returned in URL 
 - Set `CLOUDFRONT_BASE_URL` to the distribution base URL.
 
 ### 5) ECS Fargate + ALB
-- Build and run the server in a container.
+- Deployment is handled by CloudFormation.
 - Configure an ALB listener (HTTPS recommended) and target group to your ECS service.
-- Attach an ECS task role that allows:
+- Ensure the ECS task role allows:
   - `s3:PutObject`, `s3:GetObject`, `s3:HeadObject` on the video bucket
 
 ## Local dev
@@ -80,4 +80,3 @@ dx serve
 ```
 
 Make sure the environment variables above are set in the shell you run `dx serve` from.
-

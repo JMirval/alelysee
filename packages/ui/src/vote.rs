@@ -3,13 +3,17 @@ use dioxus::prelude::*;
 use api::types::ContentTargetType;
 
 #[component]
-pub fn VoteWidget(target_type: ContentTargetType, target_id: String, initial_score: i64) -> Element {
+pub fn VoteWidget(
+    target_type: ContentTargetType,
+    target_id: String,
+    initial_score: i64,
+) -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let lang = crate::use_lang()();
 
     let mut score = use_signal(move || initial_score);
     let mut my_vote = use_signal(|| None::<i16>);
-    let mut err = use_signal(|| String::new());
+    let mut err = use_signal(String::new);
     let target_id_up = target_id.clone();
     let target_id_down = target_id.clone();
     let target_id_clear = target_id;
@@ -117,5 +121,3 @@ pub fn VoteWidget(target_type: ContentTargetType, target_id: String, initial_sco
         }
     }
 }
-
-

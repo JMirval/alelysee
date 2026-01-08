@@ -19,7 +19,7 @@ pub fn AuthBootstrap() -> Element {
             // Dioxus 0.7: `eval` is available cross-platform (web/desktop/mobile) via WebView JS.
             if let Ok(v) = document::eval(
                 r#"(function(){
-                    try { return localStorage.getItem("heliastes_id_token") || ""; }
+                    try { return localStorage.getItem("alelysee_id_token") || ""; }
                     catch(e) { return ""; }
                 })()"#,
             )
@@ -116,7 +116,7 @@ pub fn AuthCallback() -> Element {
                 // Persist in localStorage if available.
                 let _ = document::eval(&format!(
                     r#"(function(){{
-                        try {{ localStorage.setItem("heliastes_id_token", "{}"); }} catch(e) {{}}
+                        try {{ localStorage.setItem("alelysee_id_token", "{}"); }} catch(e) {{}}
                         return "";
                     }})()"#,
                     js_escape(&token)
@@ -155,7 +155,7 @@ pub fn SignOutButton() -> Element {
                 id_token.set(None);
                 spawn(async move {
                     let _ = document::eval(
-                            r#"(function(){ try { localStorage.removeItem("heliastes_id_token"); } catch(e) {} return ""; })()"#,
+                            r#"(function(){ try { localStorage.removeItem("alelysee_id_token"); } catch(e) {} return ""; })()"#,
                         )
                         .await;
                 });

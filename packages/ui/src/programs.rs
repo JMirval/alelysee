@@ -53,11 +53,11 @@ pub fn ProgramNewPage() -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
 
-    let mut title = use_signal(|| String::new());
-    let mut summary = use_signal(|| String::new());
-    let mut body = use_signal(|| String::new());
-    let mut proposal_ids = use_signal(|| String::new());
-    let mut status = use_signal(|| String::new());
+    let mut title = use_signal(String::new);
+    let mut summary = use_signal(String::new);
+    let mut body = use_signal(String::new);
+    let mut proposal_ids = use_signal(String::new);
+    let mut status = use_signal(String::new);
 
     let title_ph = crate::t(lang, "programs.form.title_ph");
     let summary_ph = crate::t(lang, "programs.form.summary_ph");
@@ -117,10 +117,8 @@ pub fn ProgramNewPage() -> Element {
                                 match api::create_program(token.clone(), t, s, b).await {
                                     Ok(program) => {
                                         // best-effort: add items in order
-                                        let mut pos = 0;
-                                        for id in ids.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
-                                            let _ = api::add_program_item(token.clone(), program.id.to_string(), id.to_string(), pos).await;
-                                            pos += 1;
+                                        for (pos, id) in ids.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).enumerate() {
+                                            let _ = api::add_program_item(token.clone(), program.id.to_string(), id.to_string(), pos as i32).await;
                                         }
                                         status.set(format!("{} /programs/{}", crate::t(lang, "programs.created_open"), program.id));
                                     }
@@ -212,5 +210,3 @@ fn truncate(s: &str, max: usize) -> String {
     }
     s.chars().take(max).collect::<String>() + "…"
 }
-
-

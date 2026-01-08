@@ -22,7 +22,9 @@ pub async fn create_proposal(
         use uuid::Uuid;
 
         let author_user_id = crate::auth::require_user_id(id_token).await?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let tags: Vec<String> = tags_csv
             .split(',')
@@ -84,7 +86,9 @@ pub async fn list_proposals(limit: i64) -> Result<Vec<Proposal>, ServerFnError> 
         use sqlx::Row;
         use time::OffsetDateTime;
 
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
         let rows = sqlx::query(
             r#"
             select
@@ -142,7 +146,9 @@ pub async fn get_proposal(id: String) -> Result<Proposal, ServerFnError> {
         use uuid::Uuid;
 
         let pid = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let row = sqlx::query(
             r#"
@@ -205,13 +211,16 @@ pub async fn update_proposal(
 
         let user_id = crate::auth::require_user_id(id_token).await?;
         let pid = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-
-        let owner = sqlx::query_scalar::<_, Uuid>("select author_user_id from proposals where id = $1")
-            .bind(pid)
-            .fetch_one(pool)
+        let pool = crate::pool()
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let owner =
+            sqlx::query_scalar::<_, Uuid>("select author_user_id from proposals where id = $1")
+                .bind(pid)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
         if owner != user_id {
             return Err(ServerFnError::new("not allowed"));
         }
@@ -265,5 +274,3 @@ pub async fn update_proposal(
         })
     }
 }
-
-

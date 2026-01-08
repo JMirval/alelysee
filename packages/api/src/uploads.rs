@@ -12,7 +12,9 @@ pub async fn create_video_upload_intent(
     #[cfg(not(feature = "server"))]
     {
         let _ = (id_token, target_type, target_id, content_type, byte_size);
-        Err(ServerFnError::new("create_video_upload_intent is server-only"))
+        Err(ServerFnError::new(
+            "create_video_upload_intent is server-only",
+        ))
     }
 
     #[cfg(feature = "server")]
@@ -39,7 +41,7 @@ pub async fn create_video_upload_intent(
             Uuid::new_v4()
         );
 
-        let config = aws_config::load_from_env().await;
+        let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
         let client = aws_sdk_s3::Client::new(&config);
 
         let presigned = client
@@ -47,9 +49,10 @@ pub async fn create_video_upload_intent(
             .bucket(&bucket)
             .key(&key)
             .content_type(content_type)
-            .presigned(PresigningConfig::expires_in(Duration::from_secs(60 * 10)).map_err(
-                |_| ServerFnError::new("presign config error"),
-            )?)
+            .presigned(
+                PresigningConfig::expires_in(Duration::from_secs(60 * 10))
+                    .map_err(|_| ServerFnError::new("presign config error"))?,
+            )
             .await
             .map_err(|e| ServerFnError::new(format!("presign error: {e}")))?;
 
@@ -82,12 +85,13 @@ pub async fn finalize_video_upload(
         use uuid::Uuid;
 
         let owner_user_id = crate::auth::require_user_id(id_token).await?;
-        let tid = Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
+        let tid =
+            Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
         let bucket =
             std::env::var("S3_BUCKET").map_err(|_| ServerFnError::new("S3_BUCKET not set"))?;
 
         // Best-effort: ensure object exists.
-        let config = aws_config::load_from_env().await;
+        let config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
         let client = aws_sdk_s3::Client::new(&config);
         client
             .head_object()
@@ -97,7 +101,9 @@ pub async fn finalize_video_upload(
             .await
             .map_err(|e| ServerFnError::new(format!("head_object failed: {e}")))?;
 
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let row = sqlx::query(
             r#"
@@ -158,8 +164,11 @@ pub async fn list_videos(
         use time::OffsetDateTime;
         use uuid::Uuid;
 
-        let tid = Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let tid =
+            Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let rows = sqlx::query(
             r#"
@@ -206,5 +215,3 @@ pub async fn list_videos(
             .collect())
     }
 }
-
-

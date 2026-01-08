@@ -4,5 +4,3 @@ use dioxus::prelude::*;
 pub fn Me() -> Element {
     rsx! { ui::MePage {} }
 }
-
-

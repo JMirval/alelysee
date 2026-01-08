@@ -4,5 +4,3 @@ use dioxus::prelude::*;
 pub fn AuthSignIn() -> Element {
     rsx! { ui::SignIn {} }
 }
-
-

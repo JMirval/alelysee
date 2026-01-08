@@ -1,8 +1,7 @@
 use dioxus::prelude::*;
 
 const THEME_CSS: Asset = asset!("/assets/styling/theme.css");
-const JS_SIGN_OUT_CLEAR: &str =
-    r#"(function(){ try { localStorage.removeItem("heliastes_id_token"); } catch(e) {} return ""; })()"#;
+const JS_SIGN_OUT_CLEAR: &str = r#"(function(){ try { localStorage.removeItem("alelysee_id_token"); } catch(e) {} return ""; })()"#;
 
 /// Account control in the top-right of the app nav:
 /// - logged out: "Sign in / Sign up" button
@@ -97,5 +96,3 @@ fn initials(name: &str) -> String {
         _ => "U".to_string(),
     }
 }
-
-

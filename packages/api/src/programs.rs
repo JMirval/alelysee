@@ -27,7 +27,9 @@ pub async fn create_program(
         use uuid::Uuid;
 
         let author_user_id = crate::auth::require_user_id(id_token).await?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let row = sqlx::query(
             r#"
@@ -84,18 +86,22 @@ pub async fn add_program_item(
         use uuid::Uuid;
 
         let user_id = crate::auth::require_user_id(id_token).await?;
-        let pid = Uuid::parse_str(&program_id).map_err(|_| ServerFnError::new("invalid program_id"))?;
+        let pid =
+            Uuid::parse_str(&program_id).map_err(|_| ServerFnError::new("invalid program_id"))?;
         let prop_id =
             Uuid::parse_str(&proposal_id).map_err(|_| ServerFnError::new("invalid proposal_id"))?;
 
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
-
-        // Ownership check (program author)
-        let owner = sqlx::query_scalar::<_, Uuid>("select author_user_id from programs where id = $1")
-            .bind(pid)
-            .fetch_one(pool)
+        let pool = crate::pool()
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Ownership check (program author)
+        let owner =
+            sqlx::query_scalar::<_, Uuid>("select author_user_id from programs where id = $1")
+                .bind(pid)
+                .fetch_one(pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
         if owner != user_id {
             return Err(ServerFnError::new("not allowed"));
         }
@@ -127,7 +133,9 @@ pub async fn list_programs(limit: i64) -> Result<Vec<Program>, ServerFnError> {
         use sqlx::Row;
         use time::OffsetDateTime;
 
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
         let rows = sqlx::query(
             r#"
             select
@@ -183,7 +191,9 @@ pub async fn get_program(id: String) -> Result<ProgramDetail, ServerFnError> {
         use uuid::Uuid;
 
         let program_id = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let row = sqlx::query(
             r#"
@@ -286,7 +296,9 @@ pub async fn update_program(
 
         let user_id = crate::auth::require_user_id(id_token).await?;
         let program_id = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let owner =
             sqlx::query_scalar::<_, Uuid>("select author_user_id from programs where id = $1")
@@ -337,5 +349,3 @@ pub async fn update_program(
         })
     }
 }
-
-

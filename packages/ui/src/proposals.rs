@@ -64,11 +64,11 @@ pub fn ProposalNewPage() -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
 
-    let mut title = use_signal(|| String::new());
-    let mut summary = use_signal(|| String::new());
-    let mut body = use_signal(|| String::new());
-    let mut tags = use_signal(|| String::new());
-    let mut status = use_signal(|| String::new());
+    let mut title = use_signal(String::new);
+    let mut summary = use_signal(String::new);
+    let mut body = use_signal(String::new);
+    let mut tags = use_signal(String::new);
+    let mut status = use_signal(String::new);
 
     let title_ph = crate::t(lang, "proposals.form.title_ph");
     let summary_ph = crate::t(lang, "proposals.form.summary_ph");

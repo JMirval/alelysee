@@ -24,8 +24,11 @@ pub async fn set_vote(
         use uuid::Uuid;
 
         let user_id = crate::auth::require_user_id(id_token).await?;
-        let tid = Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let tid =
+            Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         if value == 0 {
             sqlx::query(
@@ -96,5 +99,3 @@ pub async fn set_vote(
         })
     }
 }
-
-

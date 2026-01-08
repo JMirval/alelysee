@@ -4,5 +4,3 @@ use dioxus::prelude::*;
 pub fn ProgramNew() -> Element {
     rsx! { ui::ProgramNewPage {} }
 }
-
-

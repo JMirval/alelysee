@@ -1,0 +1,93 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  APP_NAME: heliastes
+  ENVIRONMENT: prod
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  DB_USERNAME: ${{ secrets.DB_USERNAME }}
+  DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+  DB_NAME: ${{ secrets.DB_NAME || 'heliastes' }}
+  DB_INSTANCE_CLASS: ${{ secrets.DB_INSTANCE_CLASS || 'db.t4g.micro' }}
+  DB_ALLOCATED_STORAGE: ${{ secrets.DB_ALLOCATED_STORAGE || '20' }}
+  COGNITO_REGION: ${{ secrets.COGNITO_REGION }}
+  COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
+  COGNITO_APP_CLIENT_ID: ${{ secrets.COGNITO_APP_CLIENT_ID }}
+  COGNITO_DOMAIN: ${{ secrets.COGNITO_DOMAIN }}
+  COGNITO_REDIRECT_URI: ${{ secrets.COGNITO_REDIRECT_URI }}
+  S3_BUCKET: ${{ secrets.S3_BUCKET }}
+  CLOUDFRONT_BASE_URL: ${{ secrets.CLOUDFRONT_BASE_URL }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Ensure ECR stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${APP_NAME}-${ENVIRONMENT}-ecr" \
+            --template-file infra/ecr.yml \
+            --parameter-overrides AppName=${APP_NAME} Environment=${ENVIRONMENT}
+
+      - name: Get ECR repository URI
+        id: ecr
+        run: |
+          REPO_URI=$(aws cloudformation describe-stacks \
+            --stack-name "${APP_NAME}-${ENVIRONMENT}-ecr" \
+            --query "Stacks[0].Outputs[?OutputKey=='RepositoryUri'].OutputValue" \
+            --output text)
+          echo "repo_uri=${REPO_URI}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::7}
+          IMAGE_URI="${{ steps.ecr.outputs.repo_uri }}:${IMAGE_TAG}"
+          docker build -t "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+          echo "IMAGE_URI=$IMAGE_URI" >> "$GITHUB_ENV"
+
+      - name: Deploy app stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${APP_NAME}-${ENVIRONMENT}-app" \
+            --template-file infra/app.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              AppName=${APP_NAME} \
+              Environment=${ENVIRONMENT} \
+              ImageUri=${IMAGE_URI} \
+              DatabaseUrl="${DATABASE_URL}" \
+              DbUsername=${DB_USERNAME} \
+              DbPassword=${DB_PASSWORD} \
+              DbName=${DB_NAME} \
+              DbInstanceClass=${DB_INSTANCE_CLASS} \
+              DbAllocatedStorage=${DB_ALLOCATED_STORAGE} \
+              CognitoRegion=${COGNITO_REGION} \
+              CognitoUserPoolId=${COGNITO_USER_POOL_ID} \
+              CognitoAppClientId=${COGNITO_APP_CLIENT_ID} \
+              CognitoDomain=${COGNITO_DOMAIN} \
+              CognitoRedirectUri=${COGNITO_REDIRECT_URI} \
+              S3Bucket=${S3_BUCKET} \
+              CloudfrontBaseUrl=${CLOUDFRONT_BASE_URL}

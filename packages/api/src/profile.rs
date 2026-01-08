@@ -21,7 +21,9 @@ pub async fn upsert_profile(
         use time::OffsetDateTime;
 
         let user_id = crate::auth::require_user_id(id_token).await?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let row = sqlx::query(
             r#"
@@ -56,5 +58,3 @@ pub async fn upsert_profile(
         })
     }
 }
-
-

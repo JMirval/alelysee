@@ -7,11 +7,11 @@ pub fn ProfileEditPage() -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
 
-    let mut display_name = use_signal(|| String::new());
-    let mut bio = use_signal(|| String::new());
-    let mut avatar_url = use_signal(|| String::new());
-    let mut location = use_signal(|| String::new());
-    let mut status = use_signal(|| String::new());
+    let mut display_name = use_signal(String::new);
+    let mut bio = use_signal(String::new);
+    let mut avatar_url = use_signal(String::new);
+    let mut location = use_signal(String::new);
+    let mut status = use_signal(String::new);
 
     rsx! {
         document::Link { rel: "stylesheet", href: FEED_CSS }
@@ -115,5 +115,3 @@ pub fn ActivityFeed() -> Element {
         }
     }
 }
-
-

@@ -1,0 +1,36 @@
+{
+    "family": "dockerhub-task",
+    "taskRoleArn": "arn:aws:iam::861276091293:role/alelysee-dev-task-role",
+    "executionRoleArn": "arn:aws:iam::861276091293:role/alelysee-dev-execution-role",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512",
+    "containerDefinitions": [
+        {
+            "name": "alelysee",
+            "image": "dode/alelysee:latest",
+            "essential": true,
+            "environment": [
+                {
+                    "name": "DATABASE_URL",
+                    "value": "postgres://alelysee:password@alelysee-dev-db.czgi000g8oyw.eu-west-3.rds.amazonaws.com:5432/alelysee"
+                }
+            ],
+            "portMappings": [
+                {
+                    "containerPort": 8080,
+                    "protocol": "tcp"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/alelysee-dev",
+                    "awslogs-region": "eu-west-3",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            }
+        }
+    ]
+}

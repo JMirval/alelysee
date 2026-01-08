@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use crate::types::{ActivityAction, ContentTargetType};
 
 #[test]
@@ -17,5 +15,3 @@ fn activity_action_as_db() {
     assert_eq!(ActivityAction::VotedDown.as_db(), "voted_down");
     assert_eq!(ActivityAction::Commented.as_db(), "commented");
 }
-
-

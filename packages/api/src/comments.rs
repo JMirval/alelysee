@@ -11,7 +11,13 @@ pub async fn create_comment(
 ) -> Result<Comment, ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
-        let _ = (id_token, target_type, target_id, parent_comment_id, body_markdown);
+        let _ = (
+            id_token,
+            target_type,
+            target_id,
+            parent_comment_id,
+            body_markdown,
+        );
         Err(ServerFnError::new("create_comment is server-only"))
     }
 
@@ -22,14 +28,19 @@ pub async fn create_comment(
         use uuid::Uuid;
 
         let author_user_id = crate::auth::require_user_id(id_token).await?;
-        let tid = Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
+        let tid =
+            Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
         let parent_id = match parent_comment_id {
             None => None,
             Some(s) if s.trim().is_empty() => None,
-            Some(s) => Some(Uuid::parse_str(&s).map_err(|_| ServerFnError::new("invalid parent_comment_id"))?),
+            Some(s) => Some(
+                Uuid::parse_str(&s).map_err(|_| ServerFnError::new("invalid parent_comment_id"))?,
+            ),
         };
 
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let row = sqlx::query(
             r#"
@@ -89,8 +100,11 @@ pub async fn list_comments(
         use time::OffsetDateTime;
         use uuid::Uuid;
 
-        let tid = Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
-        let pool = crate::pool().await.map_err(|e| ServerFnError::new(e.to_string()))?;
+        let tid =
+            Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let rows = sqlx::query(
             r#"
@@ -132,5 +146,3 @@ pub async fn list_comments(
             .collect())
     }
 }
-
-

@@ -4,5 +4,3 @@ use dioxus::prelude::*;
 pub fn Proposals() -> Element {
     rsx! { ui::ProposalListPage {} }
 }
-
-

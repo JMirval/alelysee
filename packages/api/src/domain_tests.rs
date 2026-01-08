@@ -23,16 +23,18 @@ async fn votes_aggregate_for_proposal() {
     // Create two users
     let sub1 = format!("test-sub-{}", Uuid::new_v4());
     let sub2 = format!("test-sub-{}", Uuid::new_v4());
-    let user1: Uuid = sqlx::query_scalar("insert into users (cognito_sub) values ($1) returning id")
-        .bind(sub1)
-        .fetch_one(pool)
-        .await
-        .unwrap();
-    let user2: Uuid = sqlx::query_scalar("insert into users (cognito_sub) values ($1) returning id")
-        .bind(sub2)
-        .fetch_one(pool)
-        .await
-        .unwrap();
+    let user1: Uuid =
+        sqlx::query_scalar("insert into users (cognito_sub) values ($1) returning id")
+            .bind(sub1)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    let user2: Uuid =
+        sqlx::query_scalar("insert into users (cognito_sub) values ($1) returning id")
+            .bind(sub2)
+            .fetch_one(pool)
+            .await
+            .unwrap();
 
     // Create proposal
     let proposal_id: Uuid = sqlx::query_scalar(
@@ -44,12 +46,14 @@ async fn votes_aggregate_for_proposal() {
     .unwrap();
 
     // Vote +1 and -1
-    sqlx::query("insert into votes (user_id, target_type, target_id, value) values ($1, 'proposal', $2, 1)")
-        .bind(user1)
-        .bind(proposal_id)
-        .execute(pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "insert into votes (user_id, target_type, target_id, value) values ($1, 'proposal', $2, 1)",
+    )
+    .bind(user1)
+    .bind(proposal_id)
+    .execute(pool)
+    .await
+    .unwrap();
     sqlx::query("insert into votes (user_id, target_type, target_id, value) values ($1, 'proposal', $2, -1)")
         .bind(user2)
         .bind(proposal_id)
@@ -82,11 +86,12 @@ async fn comments_and_activity_insert() {
 
     // user + proposal
     let sub = format!("test-sub-{}", Uuid::new_v4());
-    let user_id: Uuid = sqlx::query_scalar("insert into users (cognito_sub) values ($1) returning id")
-        .bind(sub)
-        .fetch_one(pool)
-        .await
-        .unwrap();
+    let user_id: Uuid =
+        sqlx::query_scalar("insert into users (cognito_sub) values ($1) returning id")
+            .bind(sub)
+            .fetch_one(pool)
+            .await
+            .unwrap();
 
     let proposal_id: Uuid = sqlx::query_scalar(
         "insert into proposals (author_user_id, title, summary, body_markdown, tags) values ($1, 'T', '', '', '{}'::text[]) returning id",
@@ -124,5 +129,3 @@ async fn comments_and_activity_insert() {
 
     assert_eq!(count, 1);
 }
-
-

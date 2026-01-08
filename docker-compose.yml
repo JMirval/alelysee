@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for local development
+  postgres:
+    image: postgres:15-alpine
+    container_name: alelysee-postgres
+    environment:
+      POSTGRES_DB: alelysee
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./packages/api/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d alelysee"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Application server
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alelysee-app
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/alelysee
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - COGNITO_REGION=${COGNITO_REGION:-us-east-1}
+      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+      - COGNITO_APP_CLIENT_ID=${COGNITO_APP_CLIENT_ID}
+      - COGNITO_DOMAIN=${COGNITO_DOMAIN}
+      - S3_BUCKET=${S3_BUCKET}
+      - CLOUDFRONT_BASE_URL=${CLOUDFRONT_BASE_URL}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

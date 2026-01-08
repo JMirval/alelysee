@@ -8,8 +8,8 @@ pub fn CommentThread(target_type: ContentTargetType, target_id: String) -> Eleme
     let token = id_token().unwrap_or_default();
     let lang = crate::use_lang()();
 
-    let mut draft = use_signal(|| String::new());
-    let mut err = use_signal(|| String::new());
+    let mut draft = use_signal(String::new);
+    let mut err = use_signal(String::new);
 
     let target_id_for_list = target_id.clone();
     let mut comments = use_resource(move || {

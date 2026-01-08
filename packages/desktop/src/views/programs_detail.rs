@@ -4,5 +4,3 @@ use dioxus::prelude::*;
 pub fn ProgramDetail(id: String) -> Element {
     rsx! { ui::ProgramDetailPage { id } }
 }
-
-

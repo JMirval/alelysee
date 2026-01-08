@@ -28,7 +28,7 @@ pub async fn pool() -> Option<&'static Pool<Postgres>> {
     };
 
     // One schema for the whole test run. We reset tables between tests.
-    let schema = "heliastes_test";
+    let schema = "alelysee_test";
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -85,5 +85,3 @@ pub async fn reset_db() -> Option<()> {
 
     Some(())
 }
-
-

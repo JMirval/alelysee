@@ -14,7 +14,7 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
         async move { api::list_videos(target_type, target_id, 20).await }
     });
 
-    let mut status = use_signal(|| String::new());
+    let mut status = use_signal(String::new);
 
     rsx! {
         div { class: "panel",
@@ -74,7 +74,7 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
             } else {
                 div { class: "panel",
                     label { "Upload a video" }
-                    input { id: "heliastes_video_file", r#type: "file", accept: "video/*" }
+                    input { id: "alelysee_video_file", r#type: "file", accept: "video/*" }
                     button {
                         class: "btn primary",
                         onclick: move |_| {
@@ -86,7 +86,7 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                 // Read file metadata from JS
                                 let meta = document::eval(
                                     r#"(function(){
-                                        const el = document.getElementById("heliastes_video_file");
+                                        const el = document.getElementById("alelysee_video_file");
                                         if(!el || !el.files || !el.files[0]) return "";
                                         const f = el.files[0];
                                         return String(f.size) + "|" + (f.type || "application/octet-stream");
@@ -127,7 +127,7 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                 // Upload file using fetch(PUT presigned_url, body=file)
                                 let js = format!(
                                     r#"(async function(){{
-                                        const el = document.getElementById("heliastes_video_file");
+                                        const el = document.getElementById("alelysee_video_file");
                                         if(!el || !el.files || !el.files[0]) return "no_file";
                                         const f = el.files[0];
                                         const resp = await fetch("{}", {{
@@ -186,5 +186,3 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
 fn js_escape(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
-
-

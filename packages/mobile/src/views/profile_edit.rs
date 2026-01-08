@@ -4,5 +4,3 @@ use dioxus::prelude::*;
 pub fn ProfileEdit() -> Element {
     rsx! { ui::ProfileEditPage {} }
 }
-
-

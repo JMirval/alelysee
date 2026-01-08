@@ -32,5 +32,3 @@ pub async fn pool() -> Result<&'static Pool<Postgres>, sqlx::Error> {
     let _ = POOL.set(pool);
     Ok(POOL.get().expect("pool initialized"))
 }
-
-

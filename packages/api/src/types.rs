@@ -142,5 +142,3 @@ pub struct UploadIntent {
     pub s3_key: String,
     pub bucket: String,
 }
-
-
