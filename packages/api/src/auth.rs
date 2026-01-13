@@ -153,8 +153,8 @@ pub struct Me {
 pub async fn public_config() -> Result<PublicConfig, ServerFnError> {
     let auth_authorize_url = std::env::var("AUTH_AUTHORIZE_URL")
         .map_err(|_| ServerFnError::new("AUTH_AUTHORIZE_URL not set"))?;
-    let auth_client_id =
-        std::env::var("AUTH_CLIENT_ID").map_err(|_| ServerFnError::new("AUTH_CLIENT_ID not set"))?;
+    let auth_client_id = std::env::var("AUTH_CLIENT_ID")
+        .map_err(|_| ServerFnError::new("AUTH_CLIENT_ID not set"))?;
     let auth_redirect_uri = std::env::var("AUTH_REDIRECT_URI")
         .map_err(|_| ServerFnError::new("AUTH_REDIRECT_URI not set"))?;
     let media_base_url = std::env::var("MEDIA_BASE_URL").ok();

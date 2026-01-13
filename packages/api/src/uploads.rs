@@ -22,7 +22,7 @@ pub async fn create_video_upload_intent(
         use aws_credential_types::Credentials;
         use aws_sdk_s3::presigning::PresigningConfig;
         use aws_sdk_s3::types::ObjectCannedAcl;
-        use aws_sdk_s3::{config::Region, config::Builder as S3ConfigBuilder};
+        use aws_sdk_s3::{config::Builder as S3ConfigBuilder, config::Region};
         use std::time::Duration;
         use uuid::Uuid;
 
@@ -102,7 +102,7 @@ pub async fn finalize_video_upload(
     #[cfg(feature = "server")]
     {
         use aws_credential_types::Credentials;
-        use aws_sdk_s3::{config::Region, config::Builder as S3ConfigBuilder};
+        use aws_sdk_s3::{config::Builder as S3ConfigBuilder, config::Region};
         use sqlx::Row;
         use time::OffsetDateTime;
         use uuid::Uuid;
