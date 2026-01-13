@@ -1,0 +1,75 @@
+# Multi-stage Docker build for Railway deployments.
+
+FROM rust:1.91.1-slim AS base
+
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY packages/api/Cargo.toml packages/api/
+COPY packages/web/Cargo.toml packages/web/
+COPY packages/desktop/Cargo.toml packages/desktop/
+COPY packages/mobile/Cargo.toml packages/mobile/
+COPY packages/ui/Cargo.toml packages/ui/
+
+COPY packages/ui/assets packages/ui/assets/
+COPY packages/web/assets packages/web/assets/
+
+ENV CARGO_INCREMENTAL=0
+
+RUN mkdir -p packages/api/src packages/web/src packages/desktop/src packages/mobile/src packages/ui/src && \
+    echo "fn main() {}" > packages/api/src/lib.rs && \
+    echo "fn main() {}" > packages/web/src/main.rs && \
+    echo "fn main() {}" > packages/desktop/src/main.rs && \
+    echo "fn main() {}" > packages/mobile/src/main.rs && \
+    echo "fn main() {}" > packages/ui/src/lib.rs
+
+RUN cargo build --release --workspace && \
+    rm -rf packages/*/src && \
+    rm -rf target/release/deps/*target*
+
+FROM base AS builder
+
+COPY packages/api/src packages/api/src/
+COPY packages/web/src packages/web/src/
+COPY packages/desktop/src packages/desktop/src/
+COPY packages/mobile/src packages/mobile/src/
+COPY packages/ui/src packages/ui/src/
+COPY packages/api/migrations packages/api/migrations/
+
+RUN cargo build --release --package web --features server
+
+FROM ubuntu:24.04 AS runtime
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --shell /bin/bash app
+
+WORKDIR /app
+
+RUN mkdir -p /app/public
+RUN echo '<!DOCTYPE html><html><head><title>Alelysee</title><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head><body><div id="main"></div></body></html>' > /app/public/index.html
+
+COPY --from=builder /app/target/release/web /app/server
+COPY --from=builder /app/packages/api/migrations /app/migrations
+
+RUN chown -R app:app /app
+USER app
+
+ENV IP=0.0.0.0
+ENV PORT=8080
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD sh -c 'curl -f "http://localhost:${PORT:-8080}/api/health" || exit 1'
+
+CMD ["./server"]
