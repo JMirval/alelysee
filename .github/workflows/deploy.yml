@@ -37,7 +37,6 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          railway login --token "$RAILWAY_TOKEN"
           railway link --project "$RAILWAY_PROJECT_ID"
           railway up --service "$RAILWAY_SERVICE_NAME" --environment "$RAILWAY_ENV_DEV"
 
@@ -57,6 +56,5 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          railway login --token "$RAILWAY_TOKEN"
           railway link --project "$RAILWAY_PROJECT_ID"
           railway up --service "$RAILWAY_SERVICE_NAME" --environment "$RAILWAY_ENV_PROD"
