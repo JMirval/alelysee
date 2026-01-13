@@ -151,7 +151,6 @@ pub struct Me {
 }
 
 pub async fn public_config() -> Result<PublicConfig, ServerFnError> {
-    // TODO(railway): configure AUTH_* and MEDIA_BASE_URL as Railway environment variables.
     let auth_authorize_url = std::env::var("AUTH_AUTHORIZE_URL")
         .map_err(|_| ServerFnError::new("AUTH_AUTHORIZE_URL not set"))?;
     let auth_client_id =

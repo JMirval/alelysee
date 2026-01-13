@@ -31,6 +31,9 @@ reqwest = { version = "0.12.23", optional = true, default-features = false, feat
     "json",
     "rustls-tls",
 ] }
+aws-config = { version = "1.8.6", optional = true }
+aws-credential-types = { version = "1.2.6", optional = true }
+aws-sdk-s3 = { version = "1.94.0", optional = true }
 chrono = { version = "0.4.42", features = ["serde"] }
 
 [features]
@@ -41,6 +44,9 @@ server = [
     "dep:anyhow",
     "dep:jsonwebtoken",
     "dep:reqwest",
+    "dep:aws-config",
+    "dep:aws-credential-types",
+    "dep:aws-sdk-s3",
     "uuid/v4",
     "uuid/rng-getrandom",
 ]

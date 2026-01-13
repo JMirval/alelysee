@@ -98,6 +98,10 @@ Key variables:
 - `DATABASE_URL`: PostgreSQL connection string
 - `AUTH_*`: Auth configuration
 - `STORAGE_BUCKET`: Object storage bucket for uploads
+- `STORAGE_ENDPOINT`: Object storage S3-compatible endpoint
+- `STORAGE_REGION`: Object storage region (use `auto` if your provider supports it)
+- `STORAGE_ACCESS_KEY`: Object storage access key
+- `STORAGE_SECRET_KEY`: Object storage secret key
 - `MEDIA_BASE_URL`: CDN base URL
 
 ## Troubleshooting

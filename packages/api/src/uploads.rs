@@ -19,10 +19,69 @@ pub async fn create_video_upload_intent(
 
     #[cfg(feature = "server")]
     {
-        let _ = (id_token, target_type, target_id, content_type, byte_size);
-        // TODO(railway): wire uploads to a Railway-hosted service or external object storage
-        // and return a presigned_put_url + storage_key here.
-        Err(ServerFnError::new("video uploads are not configured"))
+        use aws_credential_types::Credentials;
+        use aws_sdk_s3::presigning::PresigningConfig;
+        use aws_sdk_s3::types::ObjectCannedAcl;
+        use aws_sdk_s3::{config::Region, config::Builder as S3ConfigBuilder};
+        use std::time::Duration;
+        use uuid::Uuid;
+
+        const MAX_BYTES: i64 = 200 * 1024 * 1024; // 200MB MVP limit
+        if byte_size <= 0 || byte_size > MAX_BYTES {
+            return Err(ServerFnError::new("invalid file size"));
+        }
+
+        // Ensure authenticated user exists (and we record ownership at finalize time).
+        let _user_id = crate::auth::require_user_id(id_token).await?;
+
+        let bucket = std::env::var("STORAGE_BUCKET")
+            .map_err(|_| ServerFnError::new("STORAGE_BUCKET not set"))?;
+        let endpoint = std::env::var("STORAGE_ENDPOINT")
+            .map_err(|_| ServerFnError::new("STORAGE_ENDPOINT not set"))?;
+        let access_key = std::env::var("STORAGE_ACCESS_KEY")
+            .map_err(|_| ServerFnError::new("STORAGE_ACCESS_KEY not set"))?;
+        let secret_key = std::env::var("STORAGE_SECRET_KEY")
+            .map_err(|_| ServerFnError::new("STORAGE_SECRET_KEY not set"))?;
+        let region = std::env::var("STORAGE_REGION").unwrap_or_else(|_| "auto".to_string());
+
+        let key = format!(
+            "videos/{}/{}/{}",
+            target_type.as_db(),
+            target_id,
+            Uuid::new_v4()
+        );
+
+        let creds = Credentials::new(access_key, secret_key, None, None, "railway");
+        let sdk_config = aws_config::from_env()
+            .region(Region::new(region))
+            .credentials_provider(creds)
+            .load()
+            .await;
+
+        let s3_config = S3ConfigBuilder::from(&sdk_config)
+            .endpoint_url(endpoint)
+            .force_path_style(true)
+            .build();
+        let client = aws_sdk_s3::Client::from_conf(s3_config);
+
+        let presigned = client
+            .put_object()
+            .bucket(&bucket)
+            .key(&key)
+            .content_type(content_type)
+            .acl(ObjectCannedAcl::Private)
+            .presigned(
+                PresigningConfig::expires_in(Duration::from_secs(60 * 10))
+                    .map_err(|_| ServerFnError::new("presign config error"))?,
+            )
+            .await
+            .map_err(|e| ServerFnError::new(format!("presign error: {e}")))?;
+
+        Ok(UploadIntent {
+            presigned_put_url: presigned.uri().to_string(),
+            storage_key: key,
+            bucket,
+        })
     }
 }
 
@@ -42,9 +101,89 @@ pub async fn finalize_video_upload(
 
     #[cfg(feature = "server")]
     {
-        let _ = (id_token, target_type, target_id, storage_key, content_type);
-        // TODO(railway): persist uploaded video metadata after verifying storage upload.
-        Err(ServerFnError::new("video uploads are not configured"))
+        use aws_credential_types::Credentials;
+        use aws_sdk_s3::{config::Region, config::Builder as S3ConfigBuilder};
+        use sqlx::Row;
+        use time::OffsetDateTime;
+        use uuid::Uuid;
+
+        let owner_user_id = crate::auth::require_user_id(id_token).await?;
+        let tid =
+            Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
+
+        let bucket = std::env::var("STORAGE_BUCKET")
+            .map_err(|_| ServerFnError::new("STORAGE_BUCKET not set"))?;
+        let endpoint = std::env::var("STORAGE_ENDPOINT")
+            .map_err(|_| ServerFnError::new("STORAGE_ENDPOINT not set"))?;
+        let access_key = std::env::var("STORAGE_ACCESS_KEY")
+            .map_err(|_| ServerFnError::new("STORAGE_ACCESS_KEY not set"))?;
+        let secret_key = std::env::var("STORAGE_SECRET_KEY")
+            .map_err(|_| ServerFnError::new("STORAGE_SECRET_KEY not set"))?;
+        let region = std::env::var("STORAGE_REGION").unwrap_or_else(|_| "auto".to_string());
+
+        let creds = Credentials::new(access_key, secret_key, None, None, "railway");
+        let sdk_config = aws_config::from_env()
+            .region(Region::new(region))
+            .credentials_provider(creds)
+            .load()
+            .await;
+
+        let s3_config = S3ConfigBuilder::from(&sdk_config)
+            .endpoint_url(endpoint)
+            .force_path_style(true)
+            .build();
+        let client = aws_sdk_s3::Client::from_conf(s3_config);
+
+        client
+            .head_object()
+            .bucket(&bucket)
+            .key(&storage_key)
+            .send()
+            .await
+            .map_err(|e| ServerFnError::new(format!("head_object failed: {e}")))?;
+
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let row = sqlx::query(
+            r#"
+            insert into videos (owner_user_id, target_type, target_id, storage_bucket, storage_key, content_type)
+            values ($1, $2, $3, $4, $5, $6)
+            returning id, owner_user_id, target_type, target_id, storage_bucket, storage_key, content_type, duration_seconds, created_at
+            "#,
+        )
+        .bind(owner_user_id)
+        .bind(target_type.as_db())
+        .bind(tid)
+        .bind(&bucket)
+        .bind(&storage_key)
+        .bind(&content_type)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let vid: Uuid = row.get("id");
+        let _ = sqlx::query(
+            "insert into activity (user_id, action, target_type, target_id) values ($1, 'created', 'video', $2)",
+        )
+        .bind(owner_user_id)
+        .bind(vid)
+        .execute(pool)
+        .await;
+
+        Ok(Video {
+            id: row.get("id"),
+            owner_user_id: row.get("owner_user_id"),
+            target_type,
+            target_id: row.get("target_id"),
+            storage_bucket: row.get("storage_bucket"),
+            storage_key: row.get("storage_key"),
+            content_type: row.get("content_type"),
+            duration_seconds: row.get("duration_seconds"),
+            created_at: row.get::<OffsetDateTime, _>("created_at"),
+            vote_score: 0,
+        })
     }
 }
 
