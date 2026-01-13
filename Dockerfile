@@ -1,4 +1,4 @@
-# Multi-stage Docker build for Heliastes Dioxus Fullstack App
+# Multi-stage Docker build for Alelysee Dioxus Fullstack App
 # ============================================================
 
 # Base stage with common dependencies
@@ -77,7 +77,7 @@ WORKDIR /app
 RUN mkdir -p /app/public
 
 # Create index.html for Dioxus
-RUN echo '<!DOCTYPE html><html><head><title>Heliastes</title><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head><body><div id="main"></div></body></html>' > /app/public/index.html
+RUN echo '<!DOCTYPE html><html><head><title>Alelysee</title><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head><body><div id="main"></div></body></html>' > /app/public/index.html
 
 # Copy the compiled binary from builder
 COPY --from=builder /app/target/release/web /app/server

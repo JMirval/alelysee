@@ -37,7 +37,7 @@ Database (choose one path):
 **A) CloudFormation‑managed RDS (default)**
 - `DB_USERNAME`
 - `DB_PASSWORD`
-- Optional: `DB_NAME` (default: `heliastes`)
+- Optional: `DB_NAME` (default: `alelysee`)
 - Optional: `DB_INSTANCE_CLASS` (default: `db.t4g.micro`)
 - Optional: `DB_ALLOCATED_STORAGE` (default: `20`)
 - Leave `DATABASE_URL` empty.
@@ -55,7 +55,7 @@ Database (choose one path):
 
 ## 6) Useful CLI checks
 ```
-aws cloudformation describe-stacks --stack-name heliastes-prod-app \
+aws cloudformation describe-stacks --stack-name alelysee-prod-app \
   --query "Stacks[0].Outputs" --output table
 ```
 

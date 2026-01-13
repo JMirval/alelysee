@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Heliastes AWS Cleanup Script
+# Alelysee AWS Cleanup Script
 # ============================
 #
 # This script cleans up all AWS resources created by the deployment script.
@@ -157,9 +157,9 @@ cleanup_ecr() {
         aws ecr delete-repository --repository-name "${STACK_NAME}" --force --region "$AWS_REGION" >/dev/null 2>&1 || true
     fi
 
-    # Also try to delete heliastes-prod if it exists
-    if aws ecr describe-repositories --repository-names "heliastes-prod" --region "$AWS_REGION" >/dev/null 2>&1; then
-        aws ecr delete-repository --repository-name "heliastes-prod" --force --region "$AWS_REGION" >/dev/null 2>&1 || true
+    # Also try to delete alelysee-prod if it exists
+    if aws ecr describe-repositories --repository-names "alelysee-prod" --region "$AWS_REGION" >/dev/null 2>&1; then
+        aws ecr delete-repository --repository-name "alelysee-prod" --force --region "$AWS_REGION" >/dev/null 2>&1 || true
     fi
 
     log_info "ECR cleanup complete"

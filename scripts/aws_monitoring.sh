@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Heliastes AWS Monitoring and Analytics Setup
+# Alelysee AWS Monitoring and Analytics Setup
 # ============================================
 #
-# This script sets up comprehensive monitoring and analytics for the Heliastes application:
+# This script sets up comprehensive monitoring and analytics for the Alelysee application:
 # - CloudWatch Logs for centralized logging
 # - CloudWatch Metrics and Dashboards for monitoring
 # - Route 53 Health Checks for endpoint monitoring

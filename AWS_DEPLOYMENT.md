@@ -1,4 +1,4 @@
-# AWS Deployment (Heliastes)
+# AWS Deployment (Alelysee)
 
 This project is a Dioxus 0.7 **fullstack** workspace (web/desktop/mobile clients + shared `api` server functions). For production we host the server on AWS and use RDS (Postgres), Cognito (auth), and S3 + CloudFront (videos). Deployment is managed via CloudFormation and GitHub Actions (see `AWS_RUNBOOK.md`).
 

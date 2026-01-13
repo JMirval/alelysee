@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Heliastes app stack (VPC, ALB, ECS Fargate, RDS)
+Description: Alelysee app stack (VPC, ALB, ECS Fargate, RDS)
 
 Parameters:
   AppName:
     Type: String
-    Default: heliastes
+    Default: alelysee
   Environment:
     Type: String
     Default: prod
@@ -47,10 +47,10 @@ Parameters:
     Description: Optional external DATABASE_URL (when provided, RDS will not be created)
   DbName:
     Type: String
-    Default: heliastes
+    Default: alelysee
   DbUsername:
     Type: String
-    Default: heliastes
+    Default: alelysee
   DbPassword:
     Type: String
     NoEcho: true

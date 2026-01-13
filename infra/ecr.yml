@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: ECR repository for Heliastes
+Description: ECR repository for Alelysee
 
 Parameters:
   AppName:
     Type: String
-    Default: heliastes
+    Default: alelysee
   Environment:
     Type: String
     Default: prod

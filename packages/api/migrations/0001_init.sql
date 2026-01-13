@@ -1,4 +1,4 @@
--- Heliastes: initial schema
+-- Alelysee: initial schema
 -- Requires Postgres extensions for UUID generation
 create extension if not exists pgcrypto;
 

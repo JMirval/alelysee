@@ -1,4 +1,4 @@
-# Heliastes - Dioxus Fullstack App Makefile
+# Alelysee - Dioxus Fullstack App Makefile
 # ===========================================
 
 .PHONY: help setup build test clean dev deploy docker-build docker-push db-setup aws-monitoring aws-status aws-monitoring-status aws-resources aws-alb-dns aws-cleanup-unused aws-cleanup-auto aws-cleanup-force
@@ -8,7 +8,7 @@ ENVIRONMENT ?= dev
 
 # Default target
 help: ## Show this help message
-	@echo "Heliastes - Dioxus Fullstack App"
+	@echo "Alelysee - Dioxus Fullstack App"
 	@echo "==============================="
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -386,7 +386,7 @@ env-template: ## Generate .env template from env.example
 # ===========
 
 info: ## Show project information
-	@echo "Heliastes - Dioxus Fullstack App"
+	@echo "Alelysee - Dioxus Fullstack App"
 	@echo "================================="
 	@echo "Packages:"
 	@cargo tree --workspace --depth 0 | grep -E "(api|web|desktop|mobile|ui)"

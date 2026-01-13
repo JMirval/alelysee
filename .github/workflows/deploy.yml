@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
 
 env:
-  APP_NAME: heliastes
+  APP_NAME: alelysee
   ENVIRONMENT: prod
   AWS_REGION: ${{ secrets.AWS_REGION }}
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   DB_USERNAME: ${{ secrets.DB_USERNAME }}
   DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-  DB_NAME: ${{ secrets.DB_NAME || 'heliastes' }}
+  DB_NAME: ${{ secrets.DB_NAME || 'alelysee' }}
   DB_INSTANCE_CLASS: ${{ secrets.DB_INSTANCE_CLASS || 'db.t4g.micro' }}
   DB_ALLOCATED_STORAGE: ${{ secrets.DB_ALLOCATED_STORAGE || '20' }}
   COGNITO_REGION: ${{ secrets.COGNITO_REGION }}
