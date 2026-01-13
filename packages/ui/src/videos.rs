@@ -38,8 +38,8 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                 None => rsx! { p { class: "hint", "Loading player…" } },
                                 Some(Err(_)) => rsx! { p { class: "hint", "Player not configured." } },
                                 Some(Ok(cfg)) => {
-                                    let src = cfg.cloudfront_base_url.as_ref().map(|base| {
-                                        format!("{}/{}", base.trim_end_matches('/'), v.s3_key)
+                                    let src = cfg.media_base_url.as_ref().map(|base| {
+                                        format!("{}/{}", base.trim_end_matches('/'), v.storage_key)
                                     });
                                     rsx! {
                                         if let Some(src) = src {
@@ -49,7 +49,7 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                                 src: "{src}",
                                             }
                                         } else {
-                                            p { class: "hint", "Set CLOUDFRONT_BASE_URL to enable playback." }
+                                            p { class: "hint", "Set MEDIA_BASE_URL to enable playback." }
                                         }
                                     }
                                 }
@@ -122,7 +122,7 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                     }
                                 };
 
-                                status.set("Uploading to S3…".to_string());
+                                status.set("Uploading to storage…".to_string());
 
                                 // Upload file using fetch(PUT presigned_url, body=file)
                                 let js = format!(
@@ -159,7 +159,7 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                     token,
                                     target_type,
                                     tid,
-                                    intent.s3_key,
+                                    intent.storage_key,
                                     ctype,
                                 )
                                 .await

@@ -37,7 +37,7 @@ pub async fn list_my_activity(
                     when a.target_type = 'proposal' then (select title from proposals where id = a.target_id)
                     when a.target_type = 'program' then (select title from programs where id = a.target_id)
                     when a.target_type = 'comment' then (select left(body_markdown, 80) from comments where id = a.target_id)
-                    when a.target_type = 'video' then (select s3_key from videos where id = a.target_id)
+                    when a.target_type = 'video' then (select storage_key from videos where id = a.target_id)
                     else null
                 end as title
             from activity a

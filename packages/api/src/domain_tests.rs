@@ -24,13 +24,13 @@ async fn votes_aggregate_for_proposal() {
     let sub1 = format!("test-sub-{}", Uuid::new_v4());
     let sub2 = format!("test-sub-{}", Uuid::new_v4());
     let user1: Uuid =
-        sqlx::query_scalar("insert into users (cognito_sub) values ($1) returning id")
+        sqlx::query_scalar("insert into users (auth_subject) values ($1) returning id")
             .bind(sub1)
             .fetch_one(pool)
             .await
             .unwrap();
     let user2: Uuid =
-        sqlx::query_scalar("insert into users (cognito_sub) values ($1) returning id")
+        sqlx::query_scalar("insert into users (auth_subject) values ($1) returning id")
             .bind(sub2)
             .fetch_one(pool)
             .await
@@ -87,7 +87,7 @@ async fn comments_and_activity_insert() {
     // user + proposal
     let sub = format!("test-sub-{}", Uuid::new_v4());
     let user_id: Uuid =
-        sqlx::query_scalar("insert into users (cognito_sub) values ($1) returning id")
+        sqlx::query_scalar("insert into users (auth_subject) values ($1) returning id")
             .bind(sub)
             .fetch_one(pool)
             .await

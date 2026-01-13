@@ -32,13 +32,7 @@ mod server {
             return Ok(set);
         }
 
-        let region = std::env::var("COGNITO_REGION").context("COGNITO_REGION must be set")?;
-        let user_pool_id =
-            std::env::var("COGNITO_USER_POOL_ID").context("COGNITO_USER_POOL_ID must be set")?;
-
-        let url = format!(
-            "https://cognito-idp.{region}.amazonaws.com/{user_pool_id}/.well-known/jwks.json"
-        );
+        let url = std::env::var("AUTH_JWKS_URL").context("AUTH_JWKS_URL must be set")?;
 
         let set: JwkSet = reqwest::Client::new()
             .get(url)
@@ -53,16 +47,11 @@ mod server {
     }
 
     fn expected_issuer() -> Result<String, anyhow::Error> {
-        let region = std::env::var("COGNITO_REGION").context("COGNITO_REGION must be set")?;
-        let user_pool_id =
-            std::env::var("COGNITO_USER_POOL_ID").context("COGNITO_USER_POOL_ID must be set")?;
-        Ok(format!(
-            "https://cognito-idp.{region}.amazonaws.com/{user_pool_id}"
-        ))
+        std::env::var("AUTH_ISSUER").context("AUTH_ISSUER must be set")
     }
 
     fn expected_audience() -> Result<String, anyhow::Error> {
-        std::env::var("COGNITO_APP_CLIENT_ID").context("COGNITO_APP_CLIENT_ID must be set")
+        std::env::var("AUTH_CLIENT_ID").context("AUTH_CLIENT_ID must be set")
     }
 
     pub async fn verify_id_token(id_token: &str) -> Result<String, anyhow::Error> {
@@ -91,14 +80,14 @@ mod server {
         Ok(token.claims.sub)
     }
 
-    pub async fn ensure_user_for_sub(cognito_sub: &str) -> Result<User, ServerFnError> {
+    pub async fn ensure_user_for_subject(subject: &str) -> Result<User, ServerFnError> {
         let pool = crate::pool()
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // Try fetch existing
-        if let Some(row) = sqlx::query("select id, created_at from users where cognito_sub = $1")
-            .bind(cognito_sub)
+        if let Some(row) = sqlx::query("select id, created_at from users where auth_subject = $1")
+            .bind(subject)
             .fetch_optional(pool)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
@@ -110,8 +99,8 @@ mod server {
 
         // Create
         let row =
-            sqlx::query("insert into users (cognito_sub) values ($1) returning id, created_at")
-                .bind(cognito_sub)
+            sqlx::query("insert into users (auth_subject) values ($1) returning id, created_at")
+                .bind(subject)
                 .fetch_one(pool)
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -148,10 +137,10 @@ mod server {
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PublicConfig {
-    pub cognito_domain: String,
-    pub cognito_client_id: String,
-    pub cognito_redirect_uri: String,
-    pub cloudfront_base_url: Option<String>,
+    pub auth_authorize_url: String,
+    pub auth_client_id: String,
+    pub auth_redirect_uri: String,
+    pub media_base_url: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -162,19 +151,20 @@ pub struct Me {
 }
 
 pub async fn public_config() -> Result<PublicConfig, ServerFnError> {
-    let cognito_domain = std::env::var("COGNITO_DOMAIN")
-        .map_err(|_| ServerFnError::new("COGNITO_DOMAIN not set"))?;
-    let cognito_client_id = std::env::var("COGNITO_APP_CLIENT_ID")
-        .map_err(|_| ServerFnError::new("COGNITO_APP_CLIENT_ID not set"))?;
-    let cognito_redirect_uri = std::env::var("COGNITO_REDIRECT_URI")
-        .map_err(|_| ServerFnError::new("COGNITO_REDIRECT_URI not set"))?;
-    let cloudfront_base_url = std::env::var("CLOUDFRONT_BASE_URL").ok();
+    // TODO(railway): configure AUTH_* and MEDIA_BASE_URL as Railway environment variables.
+    let auth_authorize_url = std::env::var("AUTH_AUTHORIZE_URL")
+        .map_err(|_| ServerFnError::new("AUTH_AUTHORIZE_URL not set"))?;
+    let auth_client_id =
+        std::env::var("AUTH_CLIENT_ID").map_err(|_| ServerFnError::new("AUTH_CLIENT_ID not set"))?;
+    let auth_redirect_uri = std::env::var("AUTH_REDIRECT_URI")
+        .map_err(|_| ServerFnError::new("AUTH_REDIRECT_URI not set"))?;
+    let media_base_url = std::env::var("MEDIA_BASE_URL").ok();
 
     Ok(PublicConfig {
-        cognito_domain,
-        cognito_client_id,
-        cognito_redirect_uri,
-        cloudfront_base_url,
+        auth_authorize_url,
+        auth_client_id,
+        auth_redirect_uri,
+        media_base_url,
     })
 }
 
@@ -191,7 +181,7 @@ pub async fn me_from_id_token(id_token: String) -> Result<Me, ServerFnError> {
             .await
             .map_err(|e| ServerFnError::new(format!("auth: {e:#}")))?;
 
-        let user = server::ensure_user_for_sub(&sub).await?;
+        let user = server::ensure_user_for_subject(&sub).await?;
         let profile = server::get_profile_for_user(user.id).await?;
         let profile_complete = profile
             .as_ref()
@@ -207,7 +197,7 @@ pub async fn me_from_id_token(id_token: String) -> Result<Me, ServerFnError> {
 
 /// Resolve an authenticated user id from an id_token.
 ///
-/// This will also upsert the `users` record for the Cognito `sub`.
+/// This will also upsert the `users` record for the auth subject.
 pub async fn require_user_id(id_token: String) -> Result<Uuid, ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
@@ -220,7 +210,7 @@ pub async fn require_user_id(id_token: String) -> Result<Uuid, ServerFnError> {
         let sub = server::verify_id_token(&id_token)
             .await
             .map_err(|e| ServerFnError::new(format!("auth: {e:#}")))?;
-        let user = server::ensure_user_for_sub(&sub).await?;
+        let user = server::ensure_user_for_subject(&sub).await?;
         Ok(user.id)
     }
 }

@@ -1,17 +1,16 @@
 # Alelysee
 
 Cross-platform **fullstack** Dioxus 0.7 app for political proposals and programs:
-- **Auth**: AWS Cognito (email/password + OAuth via Hosted UI)
+- **Auth**: Hosted UI (email/password + OAuth)
 - **Profiles**: create/edit profile
 - **Content**: proposals + programs (bundle proposals)
 - **Interaction**: up/down votes, comments, and an activity feed on your profile
-- **Video**: upload videos for proposals/programs to S3 via pre-signed URLs; play via CloudFront
+- **Video**: upload videos for proposals/programs via pre-signed URLs; play via CDN
 
 ## Quick Start
 
 ### Prerequisites
 - Rust 1.91.1+
-- AWS CLI configured
 - Docker (optional, for containerized deployment)
 - PostgreSQL (for local development)
 
@@ -30,13 +29,7 @@ Cross-platform **fullstack** Dioxus 0.7 app for political proposals and programs
    # Edit .env with your configuration
    ```
 
-3. **Setup AWS resources:**
-   ```bash
-   export CERT_ARN="arn:aws:acm:region:account:certificate/certificate-id"
-   make aws-setup
-   ```
-
-4. **Start development server:**
+3. **Start development server:**
    ```bash
    make dev
    ```
@@ -83,36 +76,6 @@ make docker-run
 - `/programs`, `/programs/new`, `/programs/:id`
 - `/api/health` - health check endpoint
 
-## AWS Deployment
-
-### Automated Deployment
-
-1. **Setup AWS resources:**
-   ```bash
-   export CERT_ARN="your-certificate-arn"
-   export DOCKER_REGISTRY="your-registry"
-   make aws-setup
-   ```
-
-2. **Deploy to environment:**
-   ```bash
-   make deploy-dev     # Deploy to development
-   make deploy-prod    # Deploy to production
-   ```
-
-### Manual Deployment
-
-See `[AWS_DEPLOYMENT.md](AWS_DEPLOYMENT.md)` for detailed AWS setup instructions.
-
-### Infrastructure Components
-
-- **ECS Fargate**: Containerized application
-- **RDS PostgreSQL**: Database
-- **ALB**: Load balancer with health checks
-- **Cognito**: Authentication
-- **S3 + CloudFront**: Video storage and delivery
-- **VPC**: Networking with public/private subnets
-
 ## Monitoring & Analytics
 
 ### Health Checks & Metrics
@@ -123,57 +86,9 @@ The application provides several monitoring endpoints:
 - **`/api/health/detailed`** - Detailed health with JSON response
 - **`/api/metrics`** - Prometheus-style metrics for monitoring
 
-### AWS Resource Management
-
-```bash
-# View all AWS resources created by deployment
-make aws-resources
-
-# View ALB DNS names for DNS configuration
-make aws-alb-dns
-
-# Clean up unused resources (safe - only empty VPCs)
-make aws-cleanup-auto
-
-# Interactive cleanup with confirmation prompts
-make aws-cleanup-unused
-
-# DANGER: Delete ALL alelysee resources (VPCs, ALBs, ECS, RDS, etc.)
-make aws-cleanup-force
-```
-
-### AWS Infrastructure Setup
-
-Deployment is handled via CloudFormation + GitHub Actions. See `AWS_RUNBOOK.md` for required secrets and workflow behavior.
-
-#### 3. Monitoring Setup (requires deployed ALB)
-```bash
-# Setup monitoring (requires deployed ALB)
-make aws-monitoring ENVIRONMENT=prod
-
-# Check monitoring status
-make aws-monitoring-status
-```
-
-Includes:
-- **CloudWatch Dashboard** - Real-time metrics visualization
-- **CloudWatch Logs** - Centralized application logging
-- **Route 53 Health Checks** - Endpoint monitoring
-- **CloudWatch Alarms** - Automated alerting
-- **AWS X-Ray** - Application tracing
-
-### Monitoring URLs
-
-After deployment, monitoring is available at:
-- **Dashboard**: `https://<region>.console.aws.amazon.com/cloudwatch/home#dashboards:name=<app>-<env>-dashboard`
-- **Logs**: `https://<region>.console.aws.amazon.com/cloudwatch/home#logsV2:log-groups`
-- **Health Checks**: `https://<region>.console.aws.amazon.com/route53/healthchecks/home`
-
 ## CI/CD
 
-GitHub Actions builds the image, pushes to ECR, and deploys the CloudFormation stack on `main`. See `AWS_RUNBOOK.md` for details.
-
-This will trigger the production deployment pipeline.
+GitHub Actions deploys to Railway for both dev and prod.
 
 ## Environment Variables
 
@@ -181,19 +96,17 @@ See `[env.example](env.example)` for required environment variables.
 
 Key variables:
 - `DATABASE_URL`: PostgreSQL connection string
-- `AWS_REGION`: AWS region
-- `COGNITO_*`: Cognito configuration
-- `S3_BUCKET`: S3 bucket for uploads
-- `CLOUDFRONT_BASE_URL`: CloudFront distribution URL
+- `AUTH_*`: Auth configuration
+- `STORAGE_BUCKET`: Object storage bucket for uploads
+- `MEDIA_BASE_URL`: CDN base URL
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **Build fails**: Ensure Rust 1.91.1+ and run `make setup`
-2. **AWS setup fails**: Check AWS CLI configuration and permissions
-3. **Database connection fails**: Verify DATABASE_URL and ensure RDS is accessible
-4. **Health check fails**: Check application logs and environment variables
+2. **Database connection fails**: Verify DATABASE_URL and ensure Postgres is accessible
+3. **Health check fails**: Check application logs and environment variables
 
 ### Useful Commands
 
@@ -201,7 +114,6 @@ Key variables:
 make health-check    # Test application health
 make logs            # View application logs
 make env-check       # Validate environment variables
-make aws-status      # Check AWS resources status
 ```
 
 ## Contributing

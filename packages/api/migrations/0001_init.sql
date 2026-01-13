@@ -16,7 +16,7 @@ end $$;
 
 create table if not exists users (
     id uuid primary key default gen_random_uuid(),
-    cognito_sub text not null unique,
+    auth_subject text not null unique,
     created_at timestamptz not null default now()
 );
 
@@ -70,8 +70,8 @@ create table if not exists videos (
     owner_user_id uuid not null references users(id) on delete cascade,
     target_type content_target_type not null,
     target_id uuid not null,
-    s3_bucket text not null,
-    s3_key text not null,
+    storage_bucket text not null,
+    storage_key text not null,
     content_type text not null,
     duration_seconds int,
     created_at timestamptz not null default now()
@@ -116,4 +116,3 @@ create table if not exists activity (
 );
 
 create index if not exists activity_user_created_idx on activity(user_id, created_at desc);
-

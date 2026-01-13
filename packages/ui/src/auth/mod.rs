@@ -83,10 +83,10 @@ pub fn SignIn() -> Element {
                 },
                 Some(Ok(cfg)) => {
                     let authorize_url = format!(
-                        "{}/oauth2/authorize?client_id={}&response_type=token&scope=openid+email+profile&redirect_uri={}",
-                        cfg.cognito_domain.trim_end_matches('/'),
-                        urlencoding::encode(&cfg.cognito_client_id),
-                        urlencoding::encode(&cfg.cognito_redirect_uri),
+                        "{}?client_id={}&response_type=token&scope=openid+email+profile&redirect_uri={}",
+                        cfg.auth_authorize_url.trim_end_matches('/'),
+                        urlencoding::encode(&cfg.auth_client_id),
+                        urlencoding::encode(&cfg.auth_redirect_uri),
                     );
                     rsx! {
                         a { class: "btn primary", href: "{authorize_url}", {crate::t(lang, "auth.signin.continue")} }
@@ -227,7 +227,7 @@ pub fn MePage() -> Element {
 }
 
 pub(crate) fn extract_id_token_from_hash(hash: &str) -> Option<String> {
-    // Cognito implicit flow returns: #id_token=...&access_token=...&...
+    // OAuth implicit flow returns: #id_token=...&access_token=...&...
     let hash = hash.strip_prefix('#').unwrap_or(hash);
     for pair in hash.split('&') {
         let mut it = pair.splitn(2, '=');

@@ -96,8 +96,8 @@ pub struct Video {
     pub owner_user_id: Uuid,
     pub target_type: ContentTargetType,
     pub target_id: Uuid,
-    pub s3_bucket: String,
-    pub s3_key: String,
+    pub storage_bucket: String,
+    pub storage_key: String,
     pub content_type: String,
     pub duration_seconds: Option<i32>,
     pub created_at: OffsetDateTime,
@@ -139,6 +139,6 @@ pub struct ActivityItem {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UploadIntent {
     pub presigned_put_url: String,
-    pub s3_key: String,
+    pub storage_key: String,
     pub bucket: String,
 }

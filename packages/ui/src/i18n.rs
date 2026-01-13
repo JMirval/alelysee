@@ -222,8 +222,8 @@ pub fn t(lang: Lang, key: &str) -> String {
         (Lang::Fr, "auth.required.cta") => "Aller à la connexion".to_string(),
         (Lang::En, "auth.required.cta") => "Go to sign in".to_string(),
 
-        (Lang::Fr, "auth.signin.body") => "Connectez-vous ou créez un compte via Cognito (email/mot de passe ou un fournisseur OAuth).".to_string(),
-        (Lang::En, "auth.signin.body") => "Sign in or sign up with email/password or an OAuth provider via Cognito.".to_string(),
+        (Lang::Fr, "auth.signin.body") => "Connectez-vous ou creez un compte via un fournisseur OAuth.".to_string(),
+        (Lang::En, "auth.signin.body") => "Sign in or sign up with an OAuth provider.".to_string(),
         (Lang::Fr, "auth.signin.continue") => "Continuer vers la connexion".to_string(),
         (Lang::En, "auth.signin.continue") => "Continue to sign in".to_string(),
         (Lang::Fr, "auth.signin.hint") => "Après connexion, vous serez redirigé vers cette application.".to_string(),

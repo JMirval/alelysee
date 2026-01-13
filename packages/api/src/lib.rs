@@ -46,7 +46,7 @@ pub async fn detailed_health_check() -> Result<serde_json::Value, ServerFnError>
         "uptime": std::process::id(), // Process ID as simple uptime indicator
         "checks": {
             "database": "unknown", // Could be extended to check DB connection
-            "storage": "unknown"   // Could be extended to check S3 access
+            "storage": "unknown"   // Could be extended to check object storage access
         }
     });
 

@@ -28,13 +28,13 @@ services:
     container_name: alelysee-app
     environment:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/alelysee
-      - AWS_REGION=${AWS_REGION:-us-east-1}
-      - COGNITO_REGION=${COGNITO_REGION:-us-east-1}
-      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
-      - COGNITO_APP_CLIENT_ID=${COGNITO_APP_CLIENT_ID}
-      - COGNITO_DOMAIN=${COGNITO_DOMAIN}
-      - S3_BUCKET=${S3_BUCKET}
-      - CLOUDFRONT_BASE_URL=${CLOUDFRONT_BASE_URL}
+      - AUTH_AUTHORIZE_URL=${AUTH_AUTHORIZE_URL}
+      - AUTH_CLIENT_ID=${AUTH_CLIENT_ID}
+      - AUTH_REDIRECT_URI=${AUTH_REDIRECT_URI}
+      - AUTH_ISSUER=${AUTH_ISSUER}
+      - AUTH_JWKS_URL=${AUTH_JWKS_URL}
+      - STORAGE_BUCKET=${STORAGE_BUCKET}
+      - MEDIA_BASE_URL=${MEDIA_BASE_URL}
     ports:
       - "8080:8080"
     depends_on:
