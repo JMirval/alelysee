@@ -37,7 +37,6 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_STAGING }}
         run: |
-          railway link --project "$RAILWAY_PROJECT_ID"
           railway up --service "$RAILWAY_SERVICE_NAME" --environment "$RAILWAY_ENV_DEV"
 
   deploy-prod:
@@ -56,5 +55,4 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PROD }}
         run: |
-          railway link --project "$RAILWAY_PROJECT_ID"
           railway up --service "$RAILWAY_SERVICE_NAME" --environment "$RAILWAY_ENV_PROD"
