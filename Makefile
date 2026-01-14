@@ -70,6 +70,9 @@ build-mobile: ## Build mobile app
 test: ## Run all tests
 	cargo test --workspace
 
+test-ci: ## Run tests for CI (server-focused, excludes desktop/mobile)
+	cargo test --workspace --exclude desktop --exclude mobile
+
 test-api: ## Run API-specific tests
 	cargo test --package api
 
@@ -136,6 +139,9 @@ fmt-check: ## Check code formatting
 
 lint: ## Run clippy linter
 	cargo clippy --all-targets --all-features -- -D warnings
+
+lint-ci: ## Run clippy for CI (server-focused, excludes desktop/mobile)
+	cargo clippy --workspace --all-targets --features server --exclude desktop --exclude mobile -- -D warnings
 
 check: ## Check code without building
 	cargo check --workspace

@@ -52,7 +52,7 @@ pub async fn create_video_upload_intent(
         );
 
         let creds = Credentials::new(access_key, secret_key, None, None, "railway");
-        let sdk_config = aws_config::from_env()
+        let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
             .region(Region::new(region))
             .credentials_provider(creds)
             .load()
@@ -122,7 +122,7 @@ pub async fn finalize_video_upload(
         let region = std::env::var("STORAGE_REGION").unwrap_or_else(|_| "auto".to_string());
 
         let creds = Credentials::new(access_key, secret_key, None, None, "railway");
-        let sdk_config = aws_config::from_env()
+        let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
             .region(Region::new(region))
             .credentials_provider(creds)
             .load()
