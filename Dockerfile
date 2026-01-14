@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Dioxus CLI for asset bundling
+RUN cargo install dioxus-cli --locked
+
 # Set working directory
 WORKDIR /app
 
@@ -55,8 +58,8 @@ COPY packages/mobile/src packages/mobile/src/
 COPY packages/ui/src packages/ui/src/
 COPY packages/api/migrations packages/api/migrations/
 
-# Build the web server binary
-RUN cargo build --release --package web --features server
+# Build client + server bundles (fullstack) so assets are generated.
+RUN dx build --web --release --package web --fullstack
 
 # Runtime stage - minimal image for running the app
 FROM ubuntu:24.04 AS runtime
@@ -73,14 +76,9 @@ RUN useradd --create-home --shell /bin/bash app
 # Set working directory
 WORKDIR /app
 
-# Create public directory for static assets
-RUN mkdir -p /app/public
-
-# Create index.html for Dioxus
-RUN echo '<!DOCTYPE html><html><head><title>Alelysee</title><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head><body><div id="main"></div></body></html>' > /app/public/index.html
-
-# Copy the compiled binary from builder
-COPY --from=builder /app/target/release/web /app/server
+# Copy the compiled binary and web assets from the dx build output
+COPY --from=builder /app/target/dx/web/release/web/server /app/server
+COPY --from=builder /app/target/dx/web/release/web/public /app/public
 
 # Copy migrations for database setup
 COPY --from=builder /app/packages/api/migrations /app/migrations

@@ -26,7 +26,7 @@ impl Lang {
 
 /// Provide `Signal<Lang>` to the component tree, defaulting to French.
 #[component]
-pub fn I18nProvider() -> Element {
+pub fn I18nProvider(children: Element) -> Element {
     let mut lang = use_signal(|| Lang::Fr);
     use_context_provider(|| lang);
 
@@ -53,7 +53,7 @@ pub fn I18nProvider() -> Element {
         });
     });
 
-    rsx! {}
+    rsx! { {children} }
 }
 
 pub fn use_lang() -> Signal<Lang> {

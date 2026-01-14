@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+RUN cargo install dioxus-cli --locked
+
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
@@ -42,7 +44,7 @@ COPY packages/mobile/src packages/mobile/src/
 COPY packages/ui/src packages/ui/src/
 COPY packages/api/migrations packages/api/migrations/
 
-RUN cargo build --release --package web --features server
+RUN dx build --web --release --package web --fullstack
 
 FROM ubuntu:24.04 AS runtime
 
@@ -55,10 +57,8 @@ RUN useradd --create-home --shell /bin/bash app
 
 WORKDIR /app
 
-RUN mkdir -p /app/public
-RUN echo '<!DOCTYPE html><html><head><title>Alelysee</title><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head><body><div id="main"></div></body></html>' > /app/public/index.html
-
-COPY --from=builder /app/target/release/web /app/server
+COPY --from=builder /app/target/dx/web/release/web/server /app/server
+COPY --from=builder /app/target/dx/web/release/web/public /app/public
 COPY --from=builder /app/packages/api/migrations /app/migrations
 
 RUN chown -R app:app /app
