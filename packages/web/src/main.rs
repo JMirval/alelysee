@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use std::env;
 
 use views::{
     AuthCallback, AuthSignIn, Blog, Home, Me, ProfileEdit, ProgramDetail, ProgramNew, Programs,
@@ -41,7 +42,77 @@ const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
+    install_panic_hook();
+    log_runtime_config();
     dioxus::launch(App);
+}
+
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("panic: {info}");
+    }));
+}
+
+fn log_runtime_config() {
+    let ip = env::var("IP").unwrap_or_else(|_| "0.0.0.0".to_string());
+    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "<missing>".to_string());
+
+    eprintln!("startup: IP={ip} PORT={port}");
+    eprintln!("startup: DATABASE_URL={}", redact_db_url(&database_url));
+
+    if database_url.contains("127.0.0.1") || database_url.contains("localhost") {
+        eprintln!("startup: WARNING DATABASE_URL points to localhost; this will fail in Railway");
+    }
+
+    log_missing_envs(
+        "auth",
+        &[
+            "AUTH_AUTHORIZE_URL",
+            "AUTH_CLIENT_ID",
+            "AUTH_REDIRECT_URI",
+            "AUTH_ISSUER",
+            "AUTH_JWKS_URL",
+        ],
+    );
+    log_missing_envs(
+        "storage",
+        &[
+            "STORAGE_BUCKET",
+            "STORAGE_ENDPOINT",
+            "STORAGE_REGION",
+            "STORAGE_ACCESS_KEY",
+            "STORAGE_SECRET_KEY",
+        ],
+    );
+}
+
+fn redact_db_url(value: &str) -> String {
+    if value == "<missing>" {
+        return value.to_string();
+    }
+
+    if let Some((prefix, rest)) = value.split_once("://") {
+        if let Some((creds, host)) = rest.split_once('@') {
+            let user = creds.split(':').next().unwrap_or("user");
+            return format!("{prefix}://{user}:***@{host}");
+        }
+    }
+
+    "<invalid DATABASE_URL>".to_string()
+}
+
+fn log_missing_envs(group: &str, keys: &[&str]) {
+    let missing: Vec<&str> = keys
+        .iter()
+        .copied()
+        .filter(|key| env::var(key).ok().is_none())
+        .collect();
+    if missing.is_empty() {
+        return;
+    }
+
+    eprintln!("startup: WARNING missing {group} envs: {}", missing.join(", "));
 }
 
 #[component]

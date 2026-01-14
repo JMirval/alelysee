@@ -57,7 +57,13 @@ pub fn I18nProvider() -> Element {
 }
 
 pub fn use_lang() -> Signal<Lang> {
-    use_context::<Signal<Lang>>()
+    if let Some(sig) = try_use_context::<Signal<Lang>>() {
+        return sig;
+    }
+
+    // Fallback for SSR or mis-ordered providers to avoid panics in production.
+    eprintln!("startup: missing I18nProvider context, using local Lang::Fr signal");
+    use_signal(|| Lang::Fr)
 }
 
 pub fn set_lang(lang: Lang) {
