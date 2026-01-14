@@ -112,7 +112,10 @@ fn log_missing_envs(group: &str, keys: &[&str]) {
         return;
     }
 
-    eprintln!("startup: WARNING missing {group} envs: {}", missing.join(", "));
+    eprintln!(
+        "startup: WARNING missing {group} envs: {}",
+        missing.join(", ")
+    );
 }
 
 #[component]
