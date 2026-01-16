@@ -1,3 +1,4 @@
+use anyhow::Result;
 use rand::Rng;
 use sha2::{Digest, Sha256};
 
@@ -12,6 +13,106 @@ pub fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
     hex::encode(hasher.finalize())
+}
+
+use lettre::{
+    message::{MultiPart, SinglePart},
+    transport::smtp::authentication::Credentials,
+    Message, SmtpTransport, Transport,
+};
+
+/// Send an email via SMTP
+pub async fn send_email(to: &str, subject: &str, html: &str, text: &str) -> Result<()> {
+    let smtp_host = std::env::var("SMTP_HOST")?;
+    let smtp_port: u16 = std::env::var("SMTP_PORT")?.parse()?;
+    let smtp_username = std::env::var("SMTP_USERNAME")?;
+    let smtp_password = std::env::var("SMTP_PASSWORD")?;
+    let smtp_from_email = std::env::var("SMTP_FROM_EMAIL")?;
+    let smtp_from_name = std::env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Alelysee".to_string());
+
+    let email = Message::builder()
+        .from(format!("{} <{}>", smtp_from_name, smtp_from_email).parse()?)
+        .to(to.parse()?)
+        .subject(subject)
+        .multipart(
+            MultiPart::alternative()
+                .singlepart(SinglePart::plain(text.to_string()))
+                .singlepart(SinglePart::html(html.to_string())),
+        )?;
+
+    let creds = Credentials::new(smtp_username, smtp_password);
+    let mailer = SmtpTransport::relay(&smtp_host)?
+        .port(smtp_port)
+        .credentials(creds)
+        .build();
+
+    // Wrap blocking SMTP operation in spawn_blocking
+    tokio::task::spawn_blocking(move || mailer.send(&email))
+        .await
+        .map_err(|e| anyhow::anyhow!("Task join error: {}", e))??;
+
+    Ok(())
+}
+
+/// Send verification email
+pub async fn send_verification_email(to: &str, token: &str) -> Result<()> {
+    let base_url = std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let verify_url = format!("{}/auth/verify?token={}", base_url, token);
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="color: #333;">Verify your email</h1>
+  <p>Welcome to Alelysee! Please verify your email address by clicking the button below:</p>
+  <p style="margin: 30px 0;">
+    <a href="{}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Verify Email</a>
+  </p>
+  <p style="color: #666; font-size: 14px;">Or copy this link: {}</p>
+  <p style="color: #666; font-size: 14px;">This link will expire in 24 hours.</p>
+</body>
+</html>"#,
+        verify_url, verify_url
+    );
+
+    let text = format!(
+        "Welcome to Alelysee!\n\nPlease verify your email address by visiting this link:\n\n{}\n\nThis link will expire in 24 hours.",
+        verify_url
+    );
+
+    send_email(to, "Verify your email address", &html, &text).await
+}
+
+/// Send password reset email
+pub async fn send_password_reset_email(to: &str, token: &str) -> Result<()> {
+    let base_url = std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let reset_url = format!("{}/auth/reset-password/confirm?token={}", base_url, token);
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="color: #333;">Reset your password</h1>
+  <p>You requested to reset your password. Click the button below to set a new password:</p>
+  <p style="margin: 30px 0;">
+    <a href="{}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Reset Password</a>
+  </p>
+  <p style="color: #666; font-size: 14px;">Or copy this link: {}</p>
+  <p style="color: #666; font-size: 14px;">This link will expire in 1 hour.</p>
+  <p style="color: #666; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+</body>
+</html>"#,
+        reset_url, reset_url
+    );
+
+    let text = format!(
+        "You requested to reset your password.\n\nVisit this link to set a new password:\n\n{}\n\nThis link will expire in 1 hour.\n\nIf you didn't request this, you can safely ignore this email.",
+        reset_url
+    );
+
+    send_email(to, "Reset your password", &html, &text).await
 }
 
 #[cfg(test)]
