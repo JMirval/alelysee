@@ -7,6 +7,9 @@ pub mod types;
 mod db;
 
 #[cfg(feature = "server")]
+pub mod email;
+
+#[cfg(feature = "server")]
 pub(crate) use db::pool;
 
 mod activity;
