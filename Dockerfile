@@ -77,7 +77,7 @@ RUN useradd --create-home --shell /bin/bash app
 WORKDIR /app
 
 # Copy the compiled binary and web assets from the dx build output
-COPY --from=builder /app/target/dx/web/release/web/server /app/server
+COPY --from=builder /app/target/dx/web/release/web/web /app/server
 COPY --from=builder /app/target/dx/web/release/web/public /app/public
 
 # Copy migrations for database setup

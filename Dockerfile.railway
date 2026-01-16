@@ -57,7 +57,7 @@ RUN useradd --create-home --shell /bin/bash app
 
 WORKDIR /app
 
-COPY --from=builder /app/target/dx/web/release/web/server /app/server
+COPY --from=builder /app/target/dx/web/release/web/web /app/server
 COPY --from=builder /app/target/dx/web/release/web/public /app/public
 COPY --from=builder /app/packages/api/migrations /app/migrations
 
