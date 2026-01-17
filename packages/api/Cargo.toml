@@ -20,6 +20,7 @@ sqlx = { version = "0.8.3", optional = true, default-features = false, features 
     "migrate",
     "uuid",
     "time",
+    "sqlite",
 ] }
 tokio = { version = "1.47.1", optional = true, features = [
     "rt-multi-thread",

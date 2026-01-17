@@ -12,3 +12,9 @@
 
 # Git worktrees
 .worktrees/
+
+# Local development mode
+.dev/
+*.db
+*.db-shm
+*.db-wal
