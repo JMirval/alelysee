@@ -56,28 +56,40 @@ mod server {
 
     pub async fn verify_id_token(id_token: &str) -> Result<String, anyhow::Error> {
         let header = decode_header(id_token).context("invalid jwt header")?;
-        let kid = header.kid.ok_or_else(|| anyhow!("jwt missing kid"))?;
 
-        let jwks = jwk_set().await?;
-        let jwk = jwks
-            .keys
-            .iter()
-            .find(|k| k.common.key_id.as_deref() == Some(kid.as_str()))
-            .ok_or_else(|| anyhow!("no matching jwk for kid"))?;
+        match header.alg {
+            Algorithm::RS256 => {
+                // OAuth flow - existing verification
+                let kid = header.kid.ok_or_else(|| anyhow!("jwt missing kid"))?;
 
-        let (n, e) = match &jwk.algorithm {
-            AlgorithmParameters::RSA(rsa) => (rsa.n.clone(), rsa.e.clone()),
-            _ => return Err(anyhow!("jwk is not rsa")),
-        };
+                let jwks = jwk_set().await?;
+                let jwk = jwks
+                    .keys
+                    .iter()
+                    .find(|k| k.common.key_id.as_deref() == Some(kid.as_str()))
+                    .ok_or_else(|| anyhow!("no matching jwk for kid"))?;
 
-        let key = DecodingKey::from_rsa_components(&n, &e).context("bad rsa components")?;
+                let (n, e) = match &jwk.algorithm {
+                    AlgorithmParameters::RSA(rsa) => (rsa.n.clone(), rsa.e.clone()),
+                    _ => return Err(anyhow!("jwk is not rsa")),
+                };
 
-        let mut validation = Validation::new(Algorithm::RS256);
-        validation.set_issuer(&[expected_issuer()?]);
-        validation.set_audience(&[expected_audience()?]);
+                let key = DecodingKey::from_rsa_components(&n, &e).context("bad rsa components")?;
 
-        let token = decode::<Claims>(id_token, &key, &validation).context("jwt verify failed")?;
-        Ok(token.claims.sub)
+                let mut validation = Validation::new(Algorithm::RS256);
+                validation.set_issuer(&[expected_issuer()?]);
+                validation.set_audience(&[expected_audience()?]);
+
+                let token = decode::<Claims>(id_token, &key, &validation).context("jwt verify failed")?;
+                Ok(token.claims.sub)
+            }
+            Algorithm::HS256 => {
+                // Local email/password flow - new verification
+                let user_id = verify_local_jwt(id_token)?;
+                Ok(user_id.to_string())
+            }
+            _ => Err(anyhow!("unsupported jwt algorithm: {:?}", header.alg)),
+        }
     }
 
     pub async fn ensure_user_for_subject(subject: &str) -> Result<User, ServerFnError> {
@@ -132,6 +144,82 @@ mod server {
             location: row.get("location"),
             updated_at: row.get("updated_at"),
         }))
+    }
+
+    pub fn validate_password(password: &str) -> Result<(), anyhow::Error> {
+        if password.len() < 8 {
+            return Err(anyhow::anyhow!(
+                "Password must be at least 8 characters"
+            ));
+        }
+        if !password.chars().any(|c| c.is_uppercase()) {
+            return Err(anyhow::anyhow!(
+                "Password must contain at least one uppercase letter"
+            ));
+        }
+        if !password.chars().any(|c| c.is_lowercase()) {
+            return Err(anyhow::anyhow!(
+                "Password must contain at least one lowercase letter"
+            ));
+        }
+        if !password.chars().any(|c| c.is_numeric()) {
+            return Err(anyhow::anyhow!(
+                "Password must contain at least one number"
+            ));
+        }
+        Ok(())
+    }
+
+    use jsonwebtoken::{encode, EncodingKey, Header};
+
+    #[derive(Debug, serde::Serialize, serde::Deserialize)]
+    struct LocalClaims {
+        sub: String,
+        iss: String,
+        exp: usize,
+        iat: usize,
+    }
+
+    pub fn generate_local_jwt(user_id: Uuid) -> Result<String, anyhow::Error> {
+        let secret = std::env::var("JWT_SECRET")
+            .context("JWT_SECRET must be set")?;
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_secs() as usize;
+
+        let exp = now + (30 * 24 * 60 * 60); // 30 days
+
+        let claims = LocalClaims {
+            sub: user_id.to_string(),
+            iss: "alelysee".to_string(),
+            exp,
+            iat: now,
+        };
+
+        let token = encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )?;
+
+        Ok(token)
+    }
+
+    pub fn verify_local_jwt(token: &str) -> Result<Uuid, anyhow::Error> {
+        let secret = std::env::var("JWT_SECRET")
+            .context("JWT_SECRET must be set")?;
+
+        let mut validation = jsonwebtoken::Validation::new(Algorithm::HS256);
+        validation.set_issuer(&["alelysee"]);
+
+        let token_data = jsonwebtoken::decode::<LocalClaims>(
+            token,
+            &jsonwebtoken::DecodingKey::from_secret(secret.as_bytes()),
+            &validation,
+        )?;
+
+        Ok(Uuid::parse_str(&token_data.claims.sub)?)
     }
 }
 
@@ -211,5 +299,70 @@ pub async fn require_user_id(id_token: String) -> Result<Uuid, ServerFnError> {
             .map_err(|e| ServerFnError::new(format!("auth: {e:#}")))?;
         let user = server::ensure_user_for_subject(&sub).await?;
         Ok(user.id)
+    }
+}
+
+#[cfg(test)]
+mod password_tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_password_accepts_strong_password() {
+        assert!(server::validate_password("Passw0rd").is_ok());
+        assert!(server::validate_password("MyP@ssw0rd123").is_ok());
+    }
+
+    #[test]
+    fn test_validate_password_rejects_short() {
+        let result = server::validate_password("Pass1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("8 characters"));
+    }
+
+    #[test]
+    fn test_validate_password_rejects_no_uppercase() {
+        let result = server::validate_password("password1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("uppercase"));
+    }
+
+    #[test]
+    fn test_validate_password_rejects_no_lowercase() {
+        let result = server::validate_password("PASSWORD1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("lowercase"));
+    }
+
+    #[test]
+    fn test_validate_password_rejects_no_number() {
+        let result = server::validate_password("Password");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("number"));
+    }
+}
+
+#[cfg(test)]
+mod jwt_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_generate_and_verify_local_jwt() {
+        std::env::set_var("JWT_SECRET", "test-secret-key-for-testing-32chars");
+
+        let user_id = uuid::Uuid::new_v4();
+        let token = server::generate_local_jwt(user_id).unwrap();
+
+        assert!(!token.is_empty());
+
+        let verified_id = server::verify_local_jwt(&token).unwrap();
+        assert_eq!(verified_id, user_id);
+    }
+
+    #[tokio::test]
+    async fn test_verify_local_jwt_rejects_invalid_token() {
+        std::env::set_var("JWT_SECRET", "test-secret-key-for-testing-32chars");
+
+        let result = server::verify_local_jwt("invalid.jwt.token");
+        assert!(result.is_err());
     }
 }
