@@ -375,6 +375,9 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
 
     #[cfg(feature = "server")]
     {
+        // Get AppState
+        let state = crate::state::AppState::global();
+
         // Validate email format (basic check)
         if !email.contains('@') || email.len() < 3 {
             return Err(ServerFnError::new("Invalid email address"));
@@ -383,9 +386,8 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         // Validate password
         server::validate_password(&password).map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        // Get database pool from state
+        let pool = state.db.pool().await;
 
         // Check if email already exists
         let existing = sqlx::query("select id from users where email = $1")
@@ -410,43 +412,43 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
             .to_string();
 
         // Create user
-        let user_row = sqlx::query(
-            "insert into users (email, password_hash, auth_subject) values ($1, $2, gen_random_uuid()::text) returning id, auth_subject"
+        // Generate UUID before insert
+        let user_id = Uuid::new_v4();
+        let auth_subject = user_id.to_string();
+
+        sqlx::query(
+            "insert into users (id, email, password_hash, auth_subject) values ($1, $2, $3, $4)"
         )
+        .bind(user_id.to_string())
         .bind(&email)
         .bind(&password_hash)
-        .fetch_one(pool)
+        .bind(&auth_subject)
+        .execute(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-        let user_id: Uuid = user_row.get("id");
-
-        // Update auth_subject to be the user_id
-        sqlx::query("update users set auth_subject = $1 where id = $2")
-            .bind(user_id.to_string())
-            .bind(user_id)
-            .execute(pool)
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // Generate verification token
         let token = crate::email::generate_token();
         let token_hash = crate::email::hash_token(&token);
+
+        // Calculate expiration as ISO 8601 string (works with both Postgres and SQLite)
         let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(24);
+        let expires_at_str = expires_at.format(&time::format_description::well_known::Rfc3339)
+            .map_err(|e| ServerFnError::new(format!("Failed to format timestamp: {}", e)))?;
 
         // Store verification token
         sqlx::query(
             "insert into email_verifications (user_id, token_hash, expires_at) values ($1, $2, $3)",
         )
-        .bind(user_id)
+        .bind(user_id.to_string())
         .bind(&token_hash)
-        .bind(expires_at)
+        .bind(&expires_at_str)
         .execute(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        // Send verification email
-        crate::email::send_verification_email(&email, &token)
+        // Send verification email using the email service from state
+        crate::email::send_verification_email(state.email.as_ref(), &email, &token)
             .await
             .map_err(|e| {
                 eprintln!("Failed to send verification email: {}", e);
@@ -578,11 +580,14 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
 
     #[cfg(feature = "server")]
     {
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        // Get AppState
+        let state = crate::state::AppState::global();
+
+        // Get database pool from state
+        let pool = state.db.pool().await;
 
         // Look up user by email
+        // sqlx::Any will automatically convert UUID columns to strings
         let user = sqlx::query("select id, password_hash from users where email = $1")
             .bind(&email)
             .fetch_optional(pool)
@@ -591,7 +596,7 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
 
         // If user exists and has password_hash, send reset email
         if let Some(user) = user {
-            let user_id: Uuid = user.get("id");
+            let user_id_str: String = user.get("id");
             let password_hash: Option<String> = user.get("password_hash");
 
             // Only send if user has a password (not OAuth-only)
@@ -599,22 +604,34 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
                 // Generate reset token
                 let token = crate::email::generate_token();
                 let token_hash = crate::email::hash_token(&token);
+
+                // Calculate expiration as ISO 8601 string
                 let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(1);
+                let expires_at_str = expires_at.format(&time::format_description::well_known::Rfc3339)
+                    .map_err(|e| {
+                        eprintln!("Failed to format timestamp: {}", e);
+                        e
+                    })
+                    .ok();
 
-                // Store reset token
-                sqlx::query(
-                    "insert into password_resets (user_id, token_hash, expires_at) values ($1, $2, $3)"
-                )
-                .bind(user_id)
-                .bind(&token_hash)
-                .bind(expires_at)
-                .execute(pool)
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
-
-                // Send reset email (log errors but don't reveal to user)
-                if let Err(e) = crate::email::send_password_reset_email(&email, &token).await {
-                    eprintln!("Failed to send password reset email: {}", e);
+                if let Some(expires_str) = expires_at_str {
+                    // Store reset token
+                    if let Err(e) = sqlx::query(
+                        "insert into password_resets (user_id, token_hash, expires_at) values ($1, $2, $3)"
+                    )
+                    .bind(&user_id_str)
+                    .bind(&token_hash)
+                    .bind(&expires_str)
+                    .execute(pool)
+                    .await
+                    {
+                        eprintln!("Failed to store reset token: {}", e);
+                    } else {
+                        // Send reset email using the email service from state (log errors but don't reveal to user)
+                        if let Err(e) = crate::email::send_password_reset_email(state.email.as_ref(), &email, &token).await {
+                            eprintln!("Failed to send password reset email: {}", e);
+                        }
+                    }
                 }
             }
         }

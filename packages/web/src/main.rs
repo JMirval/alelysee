@@ -52,8 +52,62 @@ const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
     install_panic_hook();
+
+    // Initialize tracing for server logs
+    #[cfg(feature = "server")]
+    init_tracing();
+
+    // Initialize AppState for server
+    #[cfg(feature = "server")]
+    init_server_state();
+
     log_runtime_config();
     dioxus::launch(App);
+}
+
+#[cfg(feature = "server")]
+fn init_tracing() {
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info,sqlx=warn".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+}
+
+#[cfg(feature = "server")]
+fn init_server_state() {
+    use std::sync::Arc;
+    use tokio::runtime::Runtime as TokioRuntime;
+
+    // Load configuration from environment
+    let config = match api::config::AppConfig::from_env() {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("Configuration error: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Initialize AppState
+    let state = TokioRuntime::new()
+        .expect("Failed to create tokio runtime")
+        .block_on(async {
+            match api::state::AppState::from_config(config).await {
+                Ok(state) => Arc::new(state),
+                Err(e) => {
+                    eprintln!("Failed to initialize AppState: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        });
+
+    // Set global state
+    api::state::AppState::set_global(state);
+    eprintln!("✓ Server initialization complete");
 }
 
 fn install_panic_hook() {

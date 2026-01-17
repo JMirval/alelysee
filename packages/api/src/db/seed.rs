@@ -14,7 +14,7 @@ pub async fn seed_database(pool: &Pool<Any>) -> Result<()> {
     let salt = SaltString::generate(&mut OsRng);
     let password_hash = argon2
         .hash_password(password.as_bytes(), &salt)
-        .context("Failed to hash password")?
+        .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?
         .to_string();
 
     // Create 3 users
@@ -252,21 +252,21 @@ async fn create_comments(
     proposal_ids: &[i32],
 ) -> Result<()> {
     let comments = vec![
-        (user2_id, proposal_ids[0], None, "Excellente idée ! Des études montrent que la productivité augmente avec moins d'heures."),
-        (user3_id, proposal_ids[0], None, "Comment financer cela sans réduction de salaire ? Il faut plus de détails."),
-        (user1_id, proposal_ids[1], None, "Le revenu universel pourrait éliminer la pauvreté et simplifier le système social."),
-        (user2_id, proposal_ids[2], None, "Absolument nécessaire pour sauver les pollinisateurs !"),
-        (user3_id, proposal_ids[2], None, "Les agriculteurs ont besoin d'alternatives viables. Il faut les accompagner."),
-        (user1_id, proposal_ids[3], None, "La gratuité des transports réduirait aussi la pollution urbaine."),
-        (user2_id, proposal_ids[4], None, "20% c'est bien, mais il faudrait viser 30% pour rattraper le retard."),
-        (user3_id, proposal_ids[5], None, "La légalisation permettrait de mieux contrôler la qualité et de réduire le trafic."),
-        (user1_id, proposal_ids[5], None, "Il faut aussi prévoir de la prévention et de l'éducation sur les risques."),
-        (user2_id, proposal_ids[6], None, "Les aides doivent être suffisantes pour que ce ne soit pas qu'un cadeau aux riches."),
-        (user3_id, proposal_ids[7], None, "La démocratie directe est l'avenir ! Donnons le pouvoir au peuple."),
-        (user1_id, proposal_ids[7], None, "Attention aux dérives populistes. Il faut des garde-fous."),
-        (user2_id, proposal_ids[8], None, "Bonne idée mais 6 mois c'est peut-être trop long. 3 mois suffiraient."),
-        (user3_id, proposal_ids[9], None, "Enfin une mesure concrète contre les inégalités scandaleuses !"),
-        (user1_id, proposal_ids[9], None, "Le ratio 1 pour 20 existe déjà dans certaines entreprises coopératives."),
+        (user2_id, proposal_ids[0], None::<i32>, "Excellente idée ! Des études montrent que la productivité augmente avec moins d'heures."),
+        (user3_id, proposal_ids[0], None::<i32>, "Comment financer cela sans réduction de salaire ? Il faut plus de détails."),
+        (user1_id, proposal_ids[1], None::<i32>, "Le revenu universel pourrait éliminer la pauvreté et simplifier le système social."),
+        (user2_id, proposal_ids[2], None::<i32>, "Absolument nécessaire pour sauver les pollinisateurs !"),
+        (user3_id, proposal_ids[2], None::<i32>, "Les agriculteurs ont besoin d'alternatives viables. Il faut les accompagner."),
+        (user1_id, proposal_ids[3], None::<i32>, "La gratuité des transports réduirait aussi la pollution urbaine."),
+        (user2_id, proposal_ids[4], None::<i32>, "20% c'est bien, mais il faudrait viser 30% pour rattraper le retard."),
+        (user3_id, proposal_ids[5], None::<i32>, "La légalisation permettrait de mieux contrôler la qualité et de réduire le trafic."),
+        (user1_id, proposal_ids[5], None::<i32>, "Il faut aussi prévoir de la prévention et de l'éducation sur les risques."),
+        (user2_id, proposal_ids[6], None::<i32>, "Les aides doivent être suffisantes pour que ce ne soit pas qu'un cadeau aux riches."),
+        (user3_id, proposal_ids[7], None::<i32>, "La démocratie directe est l'avenir ! Donnons le pouvoir au peuple."),
+        (user1_id, proposal_ids[7], None::<i32>, "Attention aux dérives populistes. Il faut des garde-fous."),
+        (user2_id, proposal_ids[8], None::<i32>, "Bonne idée mais 6 mois c'est peut-être trop long. 3 mois suffiraient."),
+        (user3_id, proposal_ids[9], None::<i32>, "Enfin une mesure concrète contre les inégalités scandaleuses !"),
+        (user1_id, proposal_ids[9], None::<i32>, "Le ratio 1 pour 20 existe déjà dans certaines entreprises coopératives."),
     ];
 
     for (user_id, proposal_id, parent_id, content) in comments {

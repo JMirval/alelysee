@@ -14,6 +14,9 @@ pub mod email;
 pub mod storage;
 
 #[cfg(feature = "server")]
+pub mod state;
+
+#[cfg(feature = "server")]
 pub(crate) use db::pool;
 
 mod activity;
