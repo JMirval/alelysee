@@ -9,14 +9,34 @@ pub struct SqliteDatabase {
 
 impl SqliteDatabase {
     pub async fn connect(path: &str) -> Result<Self> {
+        let path = Path::new(path);
+
         // Create .dev directory if it doesn't exist
-        if let Some(parent) = Path::new(path).parent() {
+        if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
                 .context("Failed to create .dev directory")?;
         }
 
-        let url = format!("sqlite:{}", path);
+        // Ensure the database file exists (avoids SQLITE_CANTOPEN on first run)
+        if !path.exists() {
+            tokio::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(path)
+                .await
+                .context("Failed to create SQLite database file")?;
+        }
+
+        // sqlx expects absolute paths as `sqlite:///absolute/path`
+        let url = if path.is_absolute() {
+            format!(
+                "sqlite:///{}",
+                path.to_string_lossy().trim_start_matches('/')
+            )
+        } else {
+            format!("sqlite://{}", path.to_string_lossy())
+        };
         let pool = sqlx::any::AnyPoolOptions::new()
             .max_connections(1) // SQLite doesn't handle concurrent writes well
             .connect(&url)

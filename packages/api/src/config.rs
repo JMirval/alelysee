@@ -69,8 +69,9 @@ pub fn load_dotenv() {
     // Try current working directory first
     let _ = dotenvy::dotenv();
 
-    // Also try the workspace root (one level above this crate)
+    // Also try the workspace root (two levels above this crate)
     let workspace_env = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
         .join("..")
         .join(".env");
     if workspace_env.exists() {
@@ -80,6 +81,10 @@ pub fn load_dotenv() {
 
 impl AppConfig {
     pub fn from_env() -> Result<Self, String> {
+        let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..");
+        let workspace_root = workspace_root.canonicalize().unwrap_or(workspace_root);
         let mode = AppMode::from_env();
 
         // JWT_SECRET is required in all modes
@@ -91,15 +96,19 @@ impl AppConfig {
 
         let (database, email, storage) = match mode {
             AppMode::Local => {
-                // Local mode: use SQLite, Console email, Filesystem storage
-                let database = DatabaseConfig::SQLite {
-                    path: ".dev/local.db".to_string(),
-                };
+                // Local mode: require PostgreSQL (SQLite migrations are not supported)
+                let database_url = std::env::var("DATABASE_URL").map_err(|_| {
+                    "DATABASE_URL is required in local mode (SQLite is not supported)".to_string()
+                })?;
+                let database = DatabaseConfig::PostgreSQL { url: database_url };
 
                 let email = EmailConfig::Console;
 
                 let storage = StorageConfig::Filesystem {
-                    base_path: ".dev/uploads".to_string(),
+                    base_path: workspace_root
+                        .join(".dev/uploads")
+                        .to_string_lossy()
+                        .to_string(),
                     serve_url: "http://localhost:8080/dev/uploads".to_string(),
                 };
 

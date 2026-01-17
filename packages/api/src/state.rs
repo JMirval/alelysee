@@ -27,19 +27,27 @@ impl AppState {
     /// This initializes all services based on the mode (Local vs Production)
     /// and handles migrations and seeding for SQLite databases.
     pub async fn from_config(config: AppConfig) -> Result<Self> {
+        // Required for sqlx::Any pools; without this, AnyPoolOptions panics at runtime.
+        sqlx::any::install_default_drivers();
+
         // Log the mode we're running in
         match config.mode {
-            AppMode::Local => {
-                tracing::info!("🔧 App Mode: LOCAL");
-                tracing::info!("   Database: SQLite (.dev/local.db)");
-                tracing::info!("   Email: Console (not sending)");
-                tracing::info!("   Storage: Filesystem (.dev/uploads/)");
-            }
-            AppMode::Production => {
-                tracing::info!("🚀 App Mode: PRODUCTION");
-                tracing::info!("   Database: PostgreSQL");
-                tracing::info!("   Email: SMTP");
-                tracing::info!("   Storage: S3-compatible");
+            AppMode::Local => tracing::info!("🔧 App Mode: LOCAL"),
+            AppMode::Production => tracing::info!("🚀 App Mode: PRODUCTION"),
+        }
+
+        match &config.database {
+            DatabaseConfig::PostgreSQL { .. } => tracing::info!("   Database: PostgreSQL"),
+            DatabaseConfig::SQLite { path } => tracing::info!("   Database: SQLite ({})", path),
+        }
+        match &config.email {
+            EmailConfig::SMTP { .. } => tracing::info!("   Email: SMTP"),
+            EmailConfig::Console => tracing::info!("   Email: Console (not sending)"),
+        }
+        match &config.storage {
+            StorageConfig::S3 { .. } => tracing::info!("   Storage: S3-compatible"),
+            StorageConfig::Filesystem { base_path, .. } => {
+                tracing::info!("   Storage: Filesystem ({})", base_path)
             }
         }
 

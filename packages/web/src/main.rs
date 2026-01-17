@@ -102,6 +102,7 @@ fn init_server_state() {
                 Ok(state) => Arc::new(state),
                 Err(e) => {
                     eprintln!("Failed to initialize AppState: {}", e);
+                    eprintln!("Failed to initialize AppState (debug): {e:?}");
                     std::process::exit(1);
                 }
             }
