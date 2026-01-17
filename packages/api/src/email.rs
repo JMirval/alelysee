@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use rand::Rng;
 use sha2::{Digest, Sha256};
 
@@ -21,41 +22,73 @@ use lettre::{
     Message, SmtpTransport, Transport,
 };
 
-/// Send an email via SMTP
-pub async fn send_email(to: &str, subject: &str, html: &str, text: &str) -> Result<()> {
-    let smtp_host = std::env::var("SMTP_HOST")?;
-    let smtp_port: u16 = std::env::var("SMTP_PORT")?.parse()?;
-    let smtp_username = std::env::var("SMTP_USERNAME")?;
-    let smtp_password = std::env::var("SMTP_PASSWORD")?;
-    let smtp_from_email = std::env::var("SMTP_FROM_EMAIL")?;
-    let smtp_from_name = std::env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Alelysee".to_string());
+/// Trait for email service implementations
+#[async_trait]
+pub trait EmailService: Send + Sync {
+    async fn send_email(&self, to: &str, subject: &str, html: &str, text: &str) -> Result<()>;
+}
 
-    let email = Message::builder()
-        .from(format!("{} <{}>", smtp_from_name, smtp_from_email).parse()?)
-        .to(to.parse()?)
-        .subject(subject)
-        .multipart(
-            MultiPart::alternative()
-                .singlepart(SinglePart::plain(text.to_string()))
-                .singlepart(SinglePart::html(html.to_string())),
-        )?;
+/// SMTP email service implementation (production)
+pub struct SmtpEmailService;
 
-    let creds = Credentials::new(smtp_username, smtp_password);
-    let mailer = SmtpTransport::relay(&smtp_host)?
-        .port(smtp_port)
-        .credentials(creds)
-        .build();
+#[async_trait]
+impl EmailService for SmtpEmailService {
+    async fn send_email(&self, to: &str, subject: &str, html: &str, text: &str) -> Result<()> {
+        let smtp_host = std::env::var("SMTP_HOST")?;
+        let smtp_port: u16 = std::env::var("SMTP_PORT")?.parse()?;
+        let smtp_username = std::env::var("SMTP_USERNAME")?;
+        let smtp_password = std::env::var("SMTP_PASSWORD")?;
+        let smtp_from_email = std::env::var("SMTP_FROM_EMAIL")?;
+        let smtp_from_name = std::env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Alelysee".to_string());
 
-    // Wrap blocking SMTP operation in spawn_blocking
-    tokio::task::spawn_blocking(move || mailer.send(&email))
-        .await
-        .map_err(|e| anyhow::anyhow!("Task join error: {}", e))??;
+        let email = Message::builder()
+            .from(format!("{} <{}>", smtp_from_name, smtp_from_email).parse()?)
+            .to(to.parse()?)
+            .subject(subject)
+            .multipart(
+                MultiPart::alternative()
+                    .singlepart(SinglePart::plain(text.to_string()))
+                    .singlepart(SinglePart::html(html.to_string())),
+            )?;
 
-    Ok(())
+        let creds = Credentials::new(smtp_username, smtp_password);
+        let mailer = SmtpTransport::relay(&smtp_host)?
+            .port(smtp_port)
+            .credentials(creds)
+            .build();
+
+        // Wrap blocking SMTP operation in spawn_blocking
+        tokio::task::spawn_blocking(move || mailer.send(&email))
+            .await
+            .map_err(|e| anyhow::anyhow!("Task join error: {}", e))??;
+
+        Ok(())
+    }
+}
+
+/// Console email service implementation (local development)
+pub struct ConsoleEmailService;
+
+#[async_trait]
+impl EmailService for ConsoleEmailService {
+    async fn send_email(&self, to: &str, subject: &str, html: &str, text: &str) -> Result<()> {
+        println!("\n📧 EMAIL (Local Mode - Not Sent)");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("To: {}", to);
+        println!("Subject: {}", subject);
+        println!("────────────────────────────────");
+        println!("HTML:");
+        println!("{}", html);
+        println!("────────────────────────────────");
+        println!("Text:");
+        println!("{}", text);
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        Ok(())
+    }
 }
 
 /// Send verification email
-pub async fn send_verification_email(to: &str, token: &str) -> Result<()> {
+pub async fn send_verification_email(email_service: &dyn EmailService, to: &str, token: &str) -> Result<()> {
     let base_url =
         std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let verify_url = format!("{}/auth/verify?token={}", base_url, token);
@@ -82,11 +115,11 @@ pub async fn send_verification_email(to: &str, token: &str) -> Result<()> {
         verify_url
     );
 
-    send_email(to, "Verify your email address", &html, &text).await
+    email_service.send_email(to, "Verify your email address", &html, &text).await
 }
 
 /// Send password reset email
-pub async fn send_password_reset_email(to: &str, token: &str) -> Result<()> {
+pub async fn send_password_reset_email(email_service: &dyn EmailService, to: &str, token: &str) -> Result<()> {
     let base_url =
         std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let reset_url = format!("{}/auth/reset-password/confirm?token={}", base_url, token);
@@ -114,7 +147,7 @@ pub async fn send_password_reset_email(to: &str, token: &str) -> Result<()> {
         reset_url
     );
 
-    send_email(to, "Reset your password", &html, &text).await
+    email_service.send_email(to, "Reset your password", &html, &text).await
 }
 
 #[cfg(test)]
