@@ -62,6 +62,22 @@ pub struct AppConfig {
     pub app_base_url: String,
 }
 
+#[cfg(feature = "server")]
+pub fn load_dotenv() {
+    use std::path::Path;
+
+    // Try current working directory first
+    let _ = dotenvy::dotenv();
+
+    // Also try the workspace root (one level above this crate)
+    let workspace_env = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join(".env");
+    if workspace_env.exists() {
+        let _ = dotenvy::from_path(workspace_env);
+    }
+}
+
 impl AppConfig {
     pub fn from_env() -> Result<Self, String> {
         let mode = AppMode::from_env();

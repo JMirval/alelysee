@@ -82,6 +82,8 @@ fn init_server_state() {
     use std::sync::Arc;
     use tokio::runtime::Runtime as TokioRuntime;
 
+    api::config::load_dotenv();
+
     // Load configuration from environment
     let config = match api::config::AppConfig::from_env() {
         Ok(config) => config,

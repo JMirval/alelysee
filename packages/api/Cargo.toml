@@ -7,6 +7,8 @@ edition = "2021"
 dioxus = { workspace = true, features = ["fullstack"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.143"
+# Load .env for local development (server only)
+dotenvy = { version = "0.15.7", optional = true }
 # IMPORTANT: disable uuid default features so the web (wasm) build doesn't pull in `v4` (needs RNG).
 uuid = { version = "1.18.1", default-features = false, features = [
     "serde",
@@ -58,6 +60,7 @@ server = [
     "dep:aws-sdk-s3",
     "dep:lettre",
     "dep:tracing",
+    "dep:dotenvy",
     "uuid/v4",
     "uuid/rng-getrandom",
 ]
