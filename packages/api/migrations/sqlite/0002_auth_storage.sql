@@ -1,0 +1,1 @@
+-- SQLite: no-op (schema already uses auth_subject/storage_* columns)

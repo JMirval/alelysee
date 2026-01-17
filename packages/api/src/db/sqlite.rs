@@ -69,7 +69,7 @@ impl Database for SqliteDatabase {
     }
 
     async fn run_migrations(&self) -> Result<()> {
-        sqlx::migrate!("./migrations")
+        sqlx::migrate!("./migrations/sqlite")
             .run(&self.pool)
             .await
             .context("Failed to run migrations")?;

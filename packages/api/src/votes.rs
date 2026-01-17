@@ -26,17 +26,16 @@ pub async fn set_vote(
         let user_id = crate::auth::require_user_id(id_token).await?;
         let tid =
             Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         if value == 0 {
             sqlx::query(
                 "delete from votes where user_id = $1 and target_type = $2 and target_id = $3",
             )
-            .bind(user_id)
+            .bind(crate::db::uuid_to_db(user_id))
             .bind(target_type.as_db())
-            .bind(tid)
+            .bind(crate::db::uuid_to_db(tid))
             .execute(pool)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -49,9 +48,9 @@ pub async fn set_vote(
                 do update set value = excluded.value, updated_at = now()
                 "#,
             )
-            .bind(user_id)
+            .bind(crate::db::uuid_to_db(user_id))
             .bind(target_type.as_db())
-            .bind(tid)
+            .bind(crate::db::uuid_to_db(tid))
             .bind(value)
             .execute(pool)
             .await
@@ -62,10 +61,10 @@ pub async fn set_vote(
             let _ = sqlx::query(
                 "insert into activity (user_id, action, target_type, target_id) values ($1, $2, $3, $4)",
             )
-            .bind(user_id)
+            .bind(crate::db::uuid_to_db(user_id))
             .bind(action)
             .bind(target_type.as_db())
-            .bind(tid)
+            .bind(crate::db::uuid_to_db(tid))
             .execute(pool)
             .await;
         } else {
@@ -76,7 +75,7 @@ pub async fn set_vote(
             "select coalesce(sum(value), 0) from votes where target_type = $1 and target_id = $2",
         )
         .bind(target_type.as_db())
-        .bind(tid)
+        .bind(crate::db::uuid_to_db(tid))
         .fetch_one(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -84,9 +83,9 @@ pub async fn set_vote(
         let my_vote: Option<i16> = sqlx::query_scalar(
             "select value from votes where user_id = $1 and target_type = $2 and target_id = $3",
         )
-        .bind(user_id)
+        .bind(crate::db::uuid_to_db(user_id))
         .bind(target_type.as_db())
-        .bind(tid)
+        .bind(crate::db::uuid_to_db(tid))
         .fetch_optional(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;

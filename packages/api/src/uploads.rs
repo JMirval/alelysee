@@ -104,7 +104,6 @@ pub async fn finalize_video_upload(
         use aws_credential_types::Credentials;
         use aws_sdk_s3::{config::Builder as S3ConfigBuilder, config::Region};
         use sqlx::Row;
-        use time::OffsetDateTime;
         use uuid::Uuid;
 
         let owner_user_id = crate::auth::require_user_id(id_token).await?;
@@ -142,20 +141,28 @@ pub async fn finalize_video_upload(
             .await
             .map_err(|e| ServerFnError::new(format!("head_object failed: {e}")))?;
 
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         let row = sqlx::query(
             r#"
             insert into videos (owner_user_id, target_type, target_id, storage_bucket, storage_key, content_type)
             values ($1, $2, $3, $4, $5, $6)
-            returning id, owner_user_id, target_type, target_id, storage_bucket, storage_key, content_type, duration_seconds, created_at
+            returning
+                CAST(id as TEXT) as id,
+                CAST(owner_user_id as TEXT) as owner_user_id,
+                target_type,
+                CAST(target_id as TEXT) as target_id,
+                storage_bucket,
+                storage_key,
+                content_type,
+                duration_seconds,
+                CAST(created_at as TEXT) as created_at
             "#,
         )
-        .bind(owner_user_id)
+        .bind(crate::db::uuid_to_db(owner_user_id))
         .bind(target_type.as_db())
-        .bind(tid)
+        .bind(crate::db::uuid_to_db(tid))
         .bind(&bucket)
         .bind(&storage_key)
         .bind(&content_type)
@@ -163,25 +170,29 @@ pub async fn finalize_video_upload(
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        let vid: Uuid = row.get("id");
+        let vid = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
         let _ = sqlx::query(
             "insert into activity (user_id, action, target_type, target_id) values ($1, 'created', 'video', $2)",
         )
-        .bind(owner_user_id)
-        .bind(vid)
+        .bind(crate::db::uuid_to_db(owner_user_id))
+        .bind(crate::db::uuid_to_db(vid))
         .execute(pool)
         .await;
 
+        let owner_user_id = crate::db::uuid_from_db(&row.get::<String, _>("owner_user_id"))?;
+        let target_id = crate::db::uuid_from_db(&row.get::<String, _>("target_id"))?;
+        let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+
         Ok(Video {
-            id: row.get("id"),
-            owner_user_id: row.get("owner_user_id"),
+            id: vid,
+            owner_user_id,
             target_type,
-            target_id: row.get("target_id"),
+            target_id,
             storage_bucket: row.get("storage_bucket"),
             storage_key: row.get("storage_key"),
             content_type: row.get("content_type"),
             duration_seconds: row.get("duration_seconds"),
-            created_at: row.get::<OffsetDateTime, _>("created_at"),
+            created_at,
             vote_score: 0,
         })
     }
@@ -202,26 +213,24 @@ pub async fn list_videos(
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
-        use time::OffsetDateTime;
         use uuid::Uuid;
 
         let tid =
             Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         let rows = sqlx::query(
             r#"
             select
-                v.id,
-                v.owner_user_id,
-                v.target_id,
+                CAST(v.id as TEXT) as id,
+                CAST(v.owner_user_id as TEXT) as owner_user_id,
+                CAST(v.target_id as TEXT) as target_id,
                 v.storage_bucket,
                 v.storage_key,
                 v.content_type,
                 v.duration_seconds,
-                v.created_at,
+                CAST(v.created_at as TEXT) as created_at,
                 coalesce(sum(vo.value), 0) as vote_score
             from videos v
             left join votes vo
@@ -233,26 +242,31 @@ pub async fn list_videos(
             "#,
         )
         .bind(target_type.as_db())
-        .bind(tid)
+        .bind(crate::db::uuid_to_db(tid))
         .bind(limit)
         .fetch_all(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| Video {
-                id: row.get("id"),
-                owner_user_id: row.get("owner_user_id"),
+        let mut videos = Vec::with_capacity(rows.len());
+        for row in rows {
+            let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+            let owner_user_id = crate::db::uuid_from_db(&row.get::<String, _>("owner_user_id"))?;
+            let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+            videos.push(Video {
+                id,
+                owner_user_id,
                 target_type,
                 target_id: tid,
                 storage_bucket: row.get("storage_bucket"),
                 storage_key: row.get("storage_key"),
                 content_type: row.get("content_type"),
                 duration_seconds: row.get("duration_seconds"),
-                created_at: row.get::<OffsetDateTime, _>("created_at"),
+                created_at,
                 vote_score: row.get::<i64, _>("vote_score"),
-            })
-            .collect())
+            });
+        }
+
+        Ok(videos)
     }
 }

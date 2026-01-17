@@ -97,57 +97,63 @@ mod server {
     }
 
     pub async fn ensure_user_for_subject(subject: &str) -> Result<User, ServerFnError> {
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         // Try fetch existing
-        if let Some(row) = sqlx::query("select id, created_at from users where auth_subject = $1")
+        if let Some(row) = sqlx::query(
+            "select CAST(id as TEXT) as id, CAST(created_at as TEXT) as created_at from users where auth_subject = $1",
+        )
             .bind(subject)
             .fetch_optional(pool)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?
         {
-            let id: Uuid = row.get("id");
-            let created_at: OffsetDateTime = row.get("created_at");
+            let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+            let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
             return Ok(User { id, created_at });
         }
 
         // Create
-        let row =
-            sqlx::query("insert into users (auth_subject) values ($1) returning id, created_at")
-                .bind(subject)
-                .fetch_one(pool)
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let row = sqlx::query(
+            "insert into users (auth_subject) values ($1) returning CAST(id as TEXT) as id, CAST(created_at as TEXT) as created_at",
+        )
+        .bind(subject)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         Ok(User {
-            id: row.get("id"),
-            created_at: row.get("created_at"),
+            id: crate::db::uuid_from_db(&row.get::<String, _>("id"))?,
+            created_at: crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?,
         })
     }
 
     pub async fn get_profile_for_user(user_id: Uuid) -> Result<Option<Profile>, ServerFnError> {
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         let row = sqlx::query(
-            "select user_id, display_name, bio, avatar_url, location, updated_at from profiles where user_id = $1",
+            "select CAST(user_id as TEXT) as user_id, display_name, bio, avatar_url, location, CAST(updated_at as TEXT) as updated_at from profiles where user_id = $1",
         )
-        .bind(user_id)
+        .bind(crate::db::uuid_to_db(user_id))
         .fetch_optional(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        Ok(row.map(|row| Profile {
-            user_id: row.get("user_id"),
-            display_name: row.get("display_name"),
-            bio: row.get("bio"),
-            avatar_url: row.get("avatar_url"),
-            location: row.get("location"),
-            updated_at: row.get("updated_at"),
-        }))
+        if let Some(row) = row {
+            let profile = Profile {
+                user_id: crate::db::uuid_from_db(&row.get::<String, _>("user_id"))?,
+                display_name: row.get("display_name"),
+                bio: row.get("bio"),
+                avatar_url: row.get("avatar_url"),
+                location: row.get("location"),
+                updated_at: crate::db::datetime_from_db(&row.get::<String, _>("updated_at"))?,
+            };
+            Ok(Some(profile))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn validate_password(password: &str) -> Result<(), anyhow::Error> {
@@ -471,13 +477,12 @@ pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
     #[cfg(feature = "server")]
     {
         let token_hash = crate::email::hash_token(&token);
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         // Look up verification token
         let verification = sqlx::query(
-            "select user_id, expires_at from email_verifications where token_hash = $1",
+            "select CAST(user_id as TEXT) as user_id, CAST(expires_at as TEXT) as expires_at from email_verifications where token_hash = $1",
         )
         .bind(&token_hash)
         .fetch_optional(pool)
@@ -487,8 +492,9 @@ pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
         let verification = verification
             .ok_or_else(|| ServerFnError::new("Verification link is invalid or has expired"))?;
 
-        let user_id: Uuid = verification.get("user_id");
-        let expires_at: time::OffsetDateTime = verification.get("expires_at");
+        let user_id = crate::db::uuid_from_db(&verification.get::<String, _>("user_id"))?;
+        let expires_at =
+            crate::db::datetime_from_db(&verification.get::<String, _>("expires_at"))?;
 
         // Check expiration
         if time::OffsetDateTime::now_utc() > expires_at {
@@ -497,7 +503,7 @@ pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
 
         // Mark email as verified
         sqlx::query("update users set email_verified = true where id = $1")
-            .bind(user_id)
+            .bind(crate::db::uuid_to_db(user_id))
             .execute(pool)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -523,21 +529,21 @@ pub async fn signin(email: String, password: String) -> Result<String, ServerFnE
 
     #[cfg(feature = "server")]
     {
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         // Look up user by email
-        let user =
-            sqlx::query("select id, password_hash, email_verified from users where email = $1")
-                .bind(&email)
-                .fetch_optional(pool)
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let user = sqlx::query(
+            "select CAST(id as TEXT) as id, password_hash, email_verified from users where email = $1",
+        )
+        .bind(&email)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let user = user.ok_or_else(|| ServerFnError::new("Invalid email or password"))?;
 
-        let user_id: Uuid = user.get("id");
+        let user_id = crate::db::uuid_from_db(&user.get::<String, _>("id"))?;
         let password_hash: Option<String> = user.get("password_hash");
         let email_verified: bool = user.get("email_verified");
 
@@ -657,23 +663,23 @@ pub async fn reset_password(token: String, new_password: String) -> Result<(), S
         server::validate_password(&new_password).map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let token_hash = crate::email::hash_token(&token);
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         // Look up reset token
-        let reset =
-            sqlx::query("select user_id, expires_at from password_resets where token_hash = $1")
-                .bind(&token_hash)
-                .fetch_optional(pool)
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let reset = sqlx::query(
+            "select CAST(user_id as TEXT) as user_id, CAST(expires_at as TEXT) as expires_at from password_resets where token_hash = $1",
+        )
+        .bind(&token_hash)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let reset =
             reset.ok_or_else(|| ServerFnError::new("Reset link is invalid or has expired"))?;
 
-        let user_id: Uuid = reset.get("user_id");
-        let expires_at: time::OffsetDateTime = reset.get("expires_at");
+        let user_id = crate::db::uuid_from_db(&reset.get::<String, _>("user_id"))?;
+        let expires_at = crate::db::datetime_from_db(&reset.get::<String, _>("expires_at"))?;
 
         // Check expiration
         if time::OffsetDateTime::now_utc() > expires_at {
@@ -694,7 +700,7 @@ pub async fn reset_password(token: String, new_password: String) -> Result<(), S
         // Update password
         sqlx::query("update users set password_hash = $1 where id = $2")
             .bind(&password_hash)
-            .bind(user_id)
+            .bind(crate::db::uuid_to_db(user_id))
             .execute(pool)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;

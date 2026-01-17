@@ -22,9 +22,8 @@ pub async fn create_proposal(
         use uuid::Uuid;
 
         let author_user_id = crate::auth::require_user_id(id_token).await?;
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         let tags: Vec<String> = tags_csv
             .split(',')
@@ -32,42 +31,73 @@ pub async fn create_proposal(
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
             .collect();
+        let tags_json = crate::db::tags_to_db(&tags)?;
 
-        let row = sqlx::query(
+        let sql = if crate::db::is_sqlite() {
             r#"
             insert into proposals (author_user_id, title, summary, body_markdown, tags)
             values ($1, $2, $3, $4, $5)
-            returning id, author_user_id, title, summary, body_markdown, tags, created_at, updated_at
-            "#,
-        )
-        .bind(author_user_id)
+            returning
+                CAST(id as TEXT) as id,
+                CAST(author_user_id as TEXT) as author_user_id,
+                title,
+                summary,
+                body_markdown,
+                tags,
+                CAST(created_at as TEXT) as created_at,
+                CAST(updated_at as TEXT) as updated_at
+            "#
+        } else {
+            r#"
+            insert into proposals (author_user_id, title, summary, body_markdown, tags)
+            values ($1, $2, $3, $4, ARRAY(SELECT jsonb_array_elements_text($5::jsonb)))
+            returning
+                CAST(id as TEXT) as id,
+                CAST(author_user_id as TEXT) as author_user_id,
+                title,
+                summary,
+                body_markdown,
+                to_json(tags)::text as tags,
+                CAST(created_at as TEXT) as created_at,
+                CAST(updated_at as TEXT) as updated_at
+            "#
+        };
+
+        let row = sqlx::query(sql)
+        .bind(crate::db::uuid_to_db(author_user_id))
         .bind(&title)
         .bind(&summary)
         .bind(&body_markdown)
-        .bind(&tags)
+        .bind(&tags_json)
         .fetch_one(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // activity: created proposal
+        let proposal_id: String = row.get("id");
         sqlx::query(
             "insert into activity (user_id, action, target_type, target_id) values ($1, 'created', 'proposal', $2)",
         )
-        .bind(author_user_id)
-        .bind::<Uuid>(row.get("id"))
+        .bind(crate::db::uuid_to_db(author_user_id))
+        .bind(&proposal_id)
         .execute(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        let id = crate::db::uuid_from_db(&proposal_id)?;
+        let author_user_id = crate::db::uuid_from_db(&row.get::<String, _>("author_user_id"))?;
+        let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+        let updated_at = crate::db::datetime_from_db(&row.get::<String, _>("updated_at"))?;
+
         Ok(Proposal {
-            id: row.get("id"),
-            author_user_id: row.get("author_user_id"),
+            id,
+            author_user_id,
             title: row.get("title"),
             summary: row.get("summary"),
             body_markdown: row.get("body_markdown"),
-            tags: row.get("tags"),
-            created_at: row.get::<OffsetDateTime, _>("created_at"),
-            updated_at: row.get::<OffsetDateTime, _>("updated_at"),
+            tags: crate::db::tags_from_db(&row.get::<String, _>("tags"))?,
+            created_at,
+            updated_at,
             vote_score: 0,
         })
     }
@@ -86,20 +116,19 @@ pub async fn list_proposals(limit: i64) -> Result<Vec<Proposal>, ServerFnError> 
         use sqlx::Row;
         use time::OffsetDateTime;
 
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
-        let rows = sqlx::query(
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
+        let sql = if crate::db::is_sqlite() {
             r#"
             select
-                p.id,
-                p.author_user_id,
+                CAST(p.id as TEXT) as id,
+                CAST(p.author_user_id as TEXT) as author_user_id,
                 p.title,
                 p.summary,
                 p.body_markdown,
                 p.tags,
-                p.created_at,
-                p.updated_at,
+                CAST(p.created_at as TEXT) as created_at,
+                CAST(p.updated_at as TEXT) as updated_at,
                 coalesce(sum(v.value), 0) as vote_score
             from proposals p
             left join votes v
@@ -107,27 +136,54 @@ pub async fn list_proposals(limit: i64) -> Result<Vec<Proposal>, ServerFnError> 
             group by p.id
             order by p.created_at desc
             limit $1
-            "#,
-        )
+            "#
+        } else {
+            r#"
+            select
+                CAST(p.id as TEXT) as id,
+                CAST(p.author_user_id as TEXT) as author_user_id,
+                p.title,
+                p.summary,
+                p.body_markdown,
+                to_json(p.tags)::text as tags,
+                CAST(p.created_at as TEXT) as created_at,
+                CAST(p.updated_at as TEXT) as updated_at,
+                coalesce(sum(v.value), 0) as vote_score
+            from proposals p
+            left join votes v
+                on v.target_type = 'proposal' and v.target_id = p.id
+            group by p.id
+            order by p.created_at desc
+            limit $1
+            "#
+        };
+
+        let rows = sqlx::query(sql)
         .bind(limit)
         .fetch_all(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| Proposal {
-                id: row.get("id"),
-                author_user_id: row.get("author_user_id"),
+        let mut proposals = Vec::with_capacity(rows.len());
+        for row in rows {
+            let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+            let author_user_id = crate::db::uuid_from_db(&row.get::<String, _>("author_user_id"))?;
+            let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+            let updated_at = crate::db::datetime_from_db(&row.get::<String, _>("updated_at"))?;
+            proposals.push(Proposal {
+                id,
+                author_user_id,
                 title: row.get("title"),
                 summary: row.get("summary"),
                 body_markdown: row.get("body_markdown"),
-                tags: row.get("tags"),
-                created_at: row.get::<OffsetDateTime, _>("created_at"),
-                updated_at: row.get::<OffsetDateTime, _>("updated_at"),
+                tags: crate::db::tags_from_db(&row.get::<String, _>("tags"))?,
+                created_at,
+                updated_at,
                 vote_score: row.get::<i64, _>("vote_score"),
-            })
-            .collect())
+            });
+        }
+
+        Ok(proposals)
     }
 }
 
@@ -146,43 +202,67 @@ pub async fn get_proposal(id: String) -> Result<Proposal, ServerFnError> {
         use uuid::Uuid;
 
         let pid = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
-        let row = sqlx::query(
+        let sql = if crate::db::is_sqlite() {
             r#"
             select
-                p.id,
-                p.author_user_id,
+                CAST(p.id as TEXT) as id,
+                CAST(p.author_user_id as TEXT) as author_user_id,
                 p.title,
                 p.summary,
                 p.body_markdown,
                 p.tags,
-                p.created_at,
-                p.updated_at,
+                CAST(p.created_at as TEXT) as created_at,
+                CAST(p.updated_at as TEXT) as updated_at,
                 coalesce(sum(v.value), 0) as vote_score
             from proposals p
             left join votes v
                 on v.target_type = 'proposal' and v.target_id = p.id
             where p.id = $1
             group by p.id
-            "#,
-        )
-        .bind(pid)
+            "#
+        } else {
+            r#"
+            select
+                CAST(p.id as TEXT) as id,
+                CAST(p.author_user_id as TEXT) as author_user_id,
+                p.title,
+                p.summary,
+                p.body_markdown,
+                to_json(p.tags)::text as tags,
+                CAST(p.created_at as TEXT) as created_at,
+                CAST(p.updated_at as TEXT) as updated_at,
+                coalesce(sum(v.value), 0) as vote_score
+            from proposals p
+            left join votes v
+                on v.target_type = 'proposal' and v.target_id = p.id
+            where p.id = $1
+            group by p.id
+            "#
+        };
+
+        let row = sqlx::query(sql)
+        .bind(crate::db::uuid_to_db(pid))
         .fetch_one(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+        let author_user_id = crate::db::uuid_from_db(&row.get::<String, _>("author_user_id"))?;
+        let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+        let updated_at = crate::db::datetime_from_db(&row.get::<String, _>("updated_at"))?;
+
         Ok(Proposal {
-            id: row.get("id"),
-            author_user_id: row.get("author_user_id"),
+            id,
+            author_user_id,
             title: row.get("title"),
             summary: row.get("summary"),
             body_markdown: row.get("body_markdown"),
-            tags: row.get("tags"),
-            created_at: row.get::<OffsetDateTime, _>("created_at"),
-            updated_at: row.get::<OffsetDateTime, _>("updated_at"),
+            tags: crate::db::tags_from_db(&row.get::<String, _>("tags"))?,
+            created_at,
+            updated_at,
             vote_score: row.get::<i64, _>("vote_score"),
         })
     }
@@ -211,16 +291,17 @@ pub async fn update_proposal(
 
         let user_id = crate::auth::require_user_id(id_token).await?;
         let pid = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
-        let owner =
-            sqlx::query_scalar::<_, Uuid>("select author_user_id from proposals where id = $1")
-                .bind(pid)
-                .fetch_one(pool)
-                .await
-                .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let owner = sqlx::query_scalar::<_, String>(
+            "select CAST(author_user_id as TEXT) from proposals where id = $1",
+        )
+        .bind(crate::db::uuid_to_db(pid))
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let owner = crate::db::uuid_from_db(&owner)?;
         if owner != user_id {
             return Err(ServerFnError::new("not allowed"));
         }
@@ -231,8 +312,9 @@ pub async fn update_proposal(
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string())
             .collect();
+        let tags_json = crate::db::tags_to_db(&tags)?;
 
-        let row = sqlx::query(
+        let sql = if crate::db::is_sqlite() {
             r#"
             update proposals
             set title = $2,
@@ -241,14 +323,43 @@ pub async fn update_proposal(
                 tags = $5,
                 updated_at = now()
             where id = $1
-            returning id, author_user_id, title, summary, body_markdown, tags, created_at, updated_at
-            "#,
-        )
-        .bind(pid)
+            returning
+                CAST(id as TEXT) as id,
+                CAST(author_user_id as TEXT) as author_user_id,
+                title,
+                summary,
+                body_markdown,
+                tags,
+                CAST(created_at as TEXT) as created_at,
+                CAST(updated_at as TEXT) as updated_at
+            "#
+        } else {
+            r#"
+            update proposals
+            set title = $2,
+                summary = $3,
+                body_markdown = $4,
+                tags = ARRAY(SELECT jsonb_array_elements_text($5::jsonb)),
+                updated_at = now()
+            where id = $1
+            returning
+                CAST(id as TEXT) as id,
+                CAST(author_user_id as TEXT) as author_user_id,
+                title,
+                summary,
+                body_markdown,
+                to_json(tags)::text as tags,
+                CAST(created_at as TEXT) as created_at,
+                CAST(updated_at as TEXT) as updated_at
+            "#
+        };
+
+        let row = sqlx::query(sql)
+        .bind(crate::db::uuid_to_db(pid))
         .bind(&title)
         .bind(&summary)
         .bind(&body_markdown)
-        .bind(&tags)
+        .bind(&tags_json)
         .fetch_one(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
@@ -256,20 +367,25 @@ pub async fn update_proposal(
         let score = sqlx::query_scalar::<_, i64>(
             "select coalesce(sum(value), 0) from votes where target_type = 'proposal' and target_id = $1",
         )
-        .bind(pid)
+        .bind(crate::db::uuid_to_db(pid))
         .fetch_one(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+        let author_user_id = crate::db::uuid_from_db(&row.get::<String, _>("author_user_id"))?;
+        let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+        let updated_at = crate::db::datetime_from_db(&row.get::<String, _>("updated_at"))?;
+
         Ok(Proposal {
-            id: row.get("id"),
-            author_user_id: row.get("author_user_id"),
+            id,
+            author_user_id,
             title: row.get("title"),
             summary: row.get("summary"),
             body_markdown: row.get("body_markdown"),
-            tags: row.get("tags"),
-            created_at: row.get::<OffsetDateTime, _>("created_at"),
-            updated_at: row.get::<OffsetDateTime, _>("updated_at"),
+            tags: crate::db::tags_from_db(&row.get::<String, _>("tags"))?,
+            created_at,
+            updated_at,
             vote_score: score,
         })
     }

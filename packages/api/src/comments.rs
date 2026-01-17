@@ -24,7 +24,6 @@ pub async fn create_comment(
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
-        use time::OffsetDateTime;
         use uuid::Uuid;
 
         let author_user_id = crate::auth::require_user_id(id_token).await?;
@@ -38,45 +37,59 @@ pub async fn create_comment(
             ),
         };
 
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
+        let parent_id_db = parent_id.map(crate::db::uuid_to_db);
         let row = sqlx::query(
             r#"
             insert into comments (author_user_id, target_type, target_id, parent_comment_id, body_markdown)
             values ($1, $2, $3, $4, $5)
-            returning id, author_user_id, target_type, target_id, parent_comment_id, body_markdown, created_at
+            returning
+                CAST(id as TEXT) as id,
+                CAST(author_user_id as TEXT) as author_user_id,
+                target_type,
+                CAST(target_id as TEXT) as target_id,
+                CAST(parent_comment_id as TEXT) as parent_comment_id,
+                body_markdown,
+                CAST(created_at as TEXT) as created_at
             "#,
         )
-        .bind(author_user_id)
+        .bind(crate::db::uuid_to_db(author_user_id))
         .bind(target_type.as_db())
-        .bind(tid)
-        .bind(parent_id)
+        .bind(crate::db::uuid_to_db(tid))
+        .bind(parent_id_db)
         .bind(&body_markdown)
         .fetch_one(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        let cid: Uuid = row.get("id");
+        let cid = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
 
         let _ = sqlx::query(
             "insert into activity (user_id, action, target_type, target_id) values ($1, 'commented', $2, $3)",
         )
-        .bind(author_user_id)
+        .bind(crate::db::uuid_to_db(author_user_id))
         .bind(target_type.as_db())
-        .bind(tid)
+        .bind(crate::db::uuid_to_db(tid))
         .execute(pool)
         .await;
 
+        let author_user_id = crate::db::uuid_from_db(&row.get::<String, _>("author_user_id"))?;
+        let parent_comment_id = match row.get::<Option<String>, _>("parent_comment_id") {
+            Some(value) => Some(crate::db::uuid_from_db(&value)?),
+            None => None,
+        };
+        let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+
         Ok(Comment {
             id: cid,
-            author_user_id: row.get("author_user_id"),
+            author_user_id,
             target_type,
             target_id: tid,
-            parent_comment_id: row.get("parent_comment_id"),
+            parent_comment_id,
             body_markdown: row.get("body_markdown"),
-            created_at: row.get::<OffsetDateTime, _>("created_at"),
+            created_at,
             vote_score: 0,
         })
     }
@@ -97,23 +110,21 @@ pub async fn list_comments(
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
-        use time::OffsetDateTime;
         use uuid::Uuid;
 
         let tid =
             Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         let rows = sqlx::query(
             r#"
             select
-                c.id,
-                c.author_user_id,
-                c.parent_comment_id,
+                CAST(c.id as TEXT) as id,
+                CAST(c.author_user_id as TEXT) as author_user_id,
+                CAST(c.parent_comment_id as TEXT) as parent_comment_id,
                 c.body_markdown,
-                c.created_at,
+                CAST(c.created_at as TEXT) as created_at,
                 coalesce(sum(v.value), 0) as vote_score
             from comments c
             left join votes v
@@ -125,24 +136,33 @@ pub async fn list_comments(
             "#,
         )
         .bind(target_type.as_db())
-        .bind(tid)
+        .bind(crate::db::uuid_to_db(tid))
         .bind(limit)
         .fetch_all(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| Comment {
-                id: row.get("id"),
-                author_user_id: row.get("author_user_id"),
+        let mut comments = Vec::with_capacity(rows.len());
+        for row in rows {
+            let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+            let author_user_id = crate::db::uuid_from_db(&row.get::<String, _>("author_user_id"))?;
+            let parent_comment_id = match row.get::<Option<String>, _>("parent_comment_id") {
+                Some(value) => Some(crate::db::uuid_from_db(&value)?),
+                None => None,
+            };
+            let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+            comments.push(Comment {
+                id,
+                author_user_id,
                 target_type,
                 target_id: tid,
-                parent_comment_id: row.get("parent_comment_id"),
+                parent_comment_id,
                 body_markdown: row.get("body_markdown"),
-                created_at: row.get::<OffsetDateTime, _>("created_at"),
+                created_at,
                 vote_score: row.get::<i64, _>("vote_score"),
-            })
-            .collect())
+            });
+        }
+
+        Ok(comments)
     }
 }

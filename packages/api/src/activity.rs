@@ -16,23 +16,19 @@ pub async fn list_my_activity(
     {
         use crate::types::{ActivityAction, ContentTargetType};
         use sqlx::Row;
-        use time::OffsetDateTime;
-        use uuid::Uuid;
-
         let user_id = crate::auth::require_user_id(id_token).await?;
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         let rows = sqlx::query(
             r#"
             select
-                a.id,
-                a.user_id,
+                CAST(a.id as TEXT) as id,
+                CAST(a.user_id as TEXT) as user_id,
                 a.action,
                 a.target_type,
-                a.target_id,
-                a.created_at,
+                CAST(a.target_id as TEXT) as target_id,
+                CAST(a.created_at as TEXT) as created_at,
                 case
                     when a.target_type = 'proposal' then (select title from proposals where id = a.target_id)
                     when a.target_type = 'program' then (select title from programs where id = a.target_id)
@@ -46,17 +42,21 @@ pub async fn list_my_activity(
             limit $2
             "#,
         )
-        .bind(user_id)
+        .bind(crate::db::uuid_to_db(user_id))
         .bind(limit)
         .fetch_all(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| ActivityItem {
-                id: row.get("id"),
-                user_id: row.get("user_id"),
+        let mut items = Vec::with_capacity(rows.len());
+        for row in rows {
+            let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+            let user_id = crate::db::uuid_from_db(&row.get::<String, _>("user_id"))?;
+            let target_id = crate::db::uuid_from_db(&row.get::<String, _>("target_id"))?;
+            let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+            items.push(ActivityItem {
+                id,
+                user_id,
                 action: match row.get::<String, _>("action").as_str() {
                     "created" => ActivityAction::Created,
                     "voted_up" => ActivityAction::VotedUp,
@@ -71,10 +71,12 @@ pub async fn list_my_activity(
                     "comment" => ContentTargetType::Comment,
                     _ => ContentTargetType::Proposal,
                 },
-                target_id: row.get::<Uuid, _>("target_id"),
-                created_at: row.get::<OffsetDateTime, _>("created_at"),
+                target_id,
+                created_at,
                 title: row.get("title"),
-            })
-            .collect())
+            });
+        }
+
+        Ok(items)
     }
 }

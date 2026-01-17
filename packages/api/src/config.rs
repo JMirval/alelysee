@@ -96,11 +96,13 @@ impl AppConfig {
 
         let (database, email, storage) = match mode {
             AppMode::Local => {
-                // Local mode: require PostgreSQL (SQLite migrations are not supported)
-                let database_url = std::env::var("DATABASE_URL").map_err(|_| {
-                    "DATABASE_URL is required in local mode (SQLite is not supported)".to_string()
-                })?;
-                let database = DatabaseConfig::PostgreSQL { url: database_url };
+                // Local mode: use SQLite, Console email, Filesystem storage
+                let database = DatabaseConfig::SQLite {
+                    path: workspace_root
+                        .join(".dev/local.db")
+                        .to_string_lossy()
+                        .to_string(),
+                };
 
                 let email = EmailConfig::Console;
 

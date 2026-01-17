@@ -18,12 +18,9 @@ pub async fn upsert_profile(
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
-        use time::OffsetDateTime;
-
         let user_id = crate::auth::require_user_id(id_token).await?;
-        let pool = crate::pool()
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
 
         let row = sqlx::query(
             r#"
@@ -36,10 +33,16 @@ pub async fn upsert_profile(
                 avatar_url = excluded.avatar_url,
                 location = excluded.location,
                 updated_at = now()
-            returning user_id, display_name, bio, avatar_url, location, updated_at
+            returning
+                CAST(user_id as TEXT) as user_id,
+                display_name,
+                bio,
+                avatar_url,
+                location,
+                CAST(updated_at as TEXT) as updated_at
             "#,
         )
-        .bind(user_id)
+        .bind(crate::db::uuid_to_db(user_id))
         .bind(&display_name)
         .bind(&bio)
         .bind(&avatar_url)
@@ -49,12 +52,12 @@ pub async fn upsert_profile(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         Ok(Profile {
-            user_id: row.get("user_id"),
+            user_id: crate::db::uuid_from_db(&row.get::<String, _>("user_id"))?,
             display_name: row.get("display_name"),
             bio: row.get("bio"),
             avatar_url: row.get("avatar_url"),
             location: row.get("location"),
-            updated_at: row.get::<OffsetDateTime, _>("updated_at"),
+            updated_at: crate::db::datetime_from_db(&row.get::<String, _>("updated_at"))?,
         })
     }
 }
