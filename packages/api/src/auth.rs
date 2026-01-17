@@ -3,6 +3,9 @@ use dioxus::prelude::ServerFnError;
 use uuid::Uuid;
 
 #[cfg(feature = "server")]
+use sqlx::Row;
+
+#[cfg(feature = "server")]
 mod server {
     use super::*;
     use anyhow::{anyhow, Context};
@@ -221,6 +224,71 @@ mod server {
 
         Ok(Uuid::parse_str(&token_data.claims.sub)?)
     }
+
+    #[cfg(test)]
+    mod password_tests {
+        use super::*;
+
+        #[test]
+        fn test_validate_password_accepts_strong_password() {
+            assert!(validate_password("Passw0rd").is_ok());
+            assert!(validate_password("MyP@ssw0rd123").is_ok());
+        }
+
+        #[test]
+        fn test_validate_password_rejects_short() {
+            let result = validate_password("Pass1");
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("8 characters"));
+        }
+
+        #[test]
+        fn test_validate_password_rejects_no_uppercase() {
+            let result = validate_password("password1");
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("uppercase"));
+        }
+
+        #[test]
+        fn test_validate_password_rejects_no_lowercase() {
+            let result = validate_password("PASSWORD1");
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("lowercase"));
+        }
+
+        #[test]
+        fn test_validate_password_rejects_no_number() {
+            let result = validate_password("Password");
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("number"));
+        }
+    }
+
+    #[cfg(test)]
+    mod jwt_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn test_generate_and_verify_local_jwt() {
+            std::env::set_var("JWT_SECRET", "test-secret-key-for-testing-32chars");
+
+            let user_id = Uuid::new_v4();
+            let token = generate_local_jwt(user_id).unwrap();
+
+            assert!(!token.is_empty());
+
+            let verified_id = verify_local_jwt(&token).unwrap();
+            assert_eq!(verified_id, user_id);
+        }
+
+        #[tokio::test]
+        async fn test_verify_local_jwt_rejects_invalid_token() {
+            std::env::set_var("JWT_SECRET", "test-secret-key-for-testing-32chars");
+
+            let result = verify_local_jwt("invalid.jwt.token");
+            assert!(result.is_err());
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -302,67 +370,334 @@ pub async fn require_user_id(id_token: String) -> Result<Uuid, ServerFnError> {
     }
 }
 
-#[cfg(test)]
-mod password_tests {
-    use super::*;
-
-    #[test]
-    fn test_validate_password_accepts_strong_password() {
-        assert!(server::validate_password("Passw0rd").is_ok());
-        assert!(server::validate_password("MyP@ssw0rd123").is_ok());
+/// Sign up a new user with email and password
+pub async fn signup(email: String, password: String) -> Result<(), ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = (email, password);
+        Err(ServerFnError::new("signup is server-only"))
     }
 
-    #[test]
-    fn test_validate_password_rejects_short() {
-        let result = server::validate_password("Pass1");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("8 characters"));
-    }
+    #[cfg(feature = "server")]
+    {
+        // Validate email format (basic check)
+        if !email.contains('@') || email.len() < 3 {
+            return Err(ServerFnError::new("Invalid email address"));
+        }
 
-    #[test]
-    fn test_validate_password_rejects_no_uppercase() {
-        let result = server::validate_password("password1");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("uppercase"));
-    }
+        // Validate password
+        server::validate_password(&password)
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    #[test]
-    fn test_validate_password_rejects_no_lowercase() {
-        let result = server::validate_password("PASSWORD1");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("lowercase"));
-    }
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-    #[test]
-    fn test_validate_password_rejects_no_number() {
-        let result = server::validate_password("Password");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("number"));
+        // Check if email already exists
+        let existing = sqlx::query("select id from users where email = $1")
+            .bind(&email)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        if existing.is_some() {
+            return Err(ServerFnError::new("Email already registered"));
+        }
+
+        // Hash password
+        use argon2::{Argon2, PasswordHasher};
+        use argon2::password_hash::SaltString;
+
+        let argon2 = Argon2::default();
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let password_hash = argon2
+            .hash_password(password.as_bytes(), &salt)
+            .map_err(|e| ServerFnError::new(format!("Password hashing failed: {}", e)))?
+            .to_string();
+
+        // Create user
+        let user_row = sqlx::query(
+            "insert into users (email, password_hash, auth_subject) values ($1, $2, gen_random_uuid()::text) returning id, auth_subject"
+        )
+        .bind(&email)
+        .bind(&password_hash)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let user_id: Uuid = user_row.get("id");
+
+        // Update auth_subject to be the user_id
+        sqlx::query("update users set auth_subject = $1 where id = $2")
+            .bind(user_id.to_string())
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Generate verification token
+        let token = crate::email::generate_token();
+        let token_hash = crate::email::hash_token(&token);
+        let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(24);
+
+        // Store verification token
+        sqlx::query(
+            "insert into email_verifications (user_id, token_hash, expires_at) values ($1, $2, $3)"
+        )
+        .bind(user_id)
+        .bind(&token_hash)
+        .bind(expires_at)
+        .execute(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Send verification email
+        crate::email::send_verification_email(&email, &token)
+            .await
+            .map_err(|e| {
+                eprintln!("Failed to send verification email: {}", e);
+                ServerFnError::new("Failed to send verification email")
+            })?;
+
+        Ok(())
     }
 }
 
-#[cfg(test)]
-mod jwt_tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_generate_and_verify_local_jwt() {
-        std::env::set_var("JWT_SECRET", "test-secret-key-for-testing-32chars");
-
-        let user_id = uuid::Uuid::new_v4();
-        let token = server::generate_local_jwt(user_id).unwrap();
-
-        assert!(!token.is_empty());
-
-        let verified_id = server::verify_local_jwt(&token).unwrap();
-        assert_eq!(verified_id, user_id);
+/// Verify email address with token
+pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = token;
+        Err(ServerFnError::new("verify_email is server-only"))
     }
 
-    #[tokio::test]
-    async fn test_verify_local_jwt_rejects_invalid_token() {
-        std::env::set_var("JWT_SECRET", "test-secret-key-for-testing-32chars");
+    #[cfg(feature = "server")]
+    {
+        let token_hash = crate::email::hash_token(&token);
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        let result = server::verify_local_jwt("invalid.jwt.token");
-        assert!(result.is_err());
+        // Look up verification token
+        let verification = sqlx::query(
+            "select user_id, expires_at from email_verifications where token_hash = $1"
+        )
+        .bind(&token_hash)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let verification = verification.ok_or_else(|| {
+            ServerFnError::new("Verification link is invalid or has expired")
+        })?;
+
+        let user_id: Uuid = verification.get("user_id");
+        let expires_at: time::OffsetDateTime = verification.get("expires_at");
+
+        // Check expiration
+        if time::OffsetDateTime::now_utc() > expires_at {
+            return Err(ServerFnError::new("Verification link has expired"));
+        }
+
+        // Mark email as verified
+        sqlx::query("update users set email_verified = true where id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Delete verification token
+        sqlx::query("delete from email_verifications where token_hash = $1")
+            .bind(&token_hash)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        Ok(())
+    }
+}
+
+/// Sign in with email and password
+pub async fn signin(email: String, password: String) -> Result<String, ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = (email, password);
+        Err(ServerFnError::new("signin is server-only"))
+    }
+
+    #[cfg(feature = "server")]
+    {
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Look up user by email
+        let user = sqlx::query(
+            "select id, password_hash, email_verified from users where email = $1"
+        )
+        .bind(&email)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let user = user.ok_or_else(|| ServerFnError::new("Invalid email or password"))?;
+
+        let user_id: Uuid = user.get("id");
+        let password_hash: Option<String> = user.get("password_hash");
+        let email_verified: bool = user.get("email_verified");
+
+        // Check if user has password (not OAuth-only)
+        let password_hash = password_hash.ok_or_else(|| {
+            ServerFnError::new("This account uses OAuth. Please sign in with your provider.")
+        })?;
+
+        // Verify password
+        use argon2::{Argon2, PasswordHash, PasswordVerifier};
+
+        let parsed_hash = PasswordHash::new(&password_hash)
+            .map_err(|e| ServerFnError::new(format!("Invalid password hash: {}", e)))?;
+
+        Argon2::default()
+            .verify_password(password.as_bytes(), &parsed_hash)
+            .map_err(|_| ServerFnError::new("Invalid email or password"))?;
+
+        // Check email verified
+        if !email_verified {
+            return Err(ServerFnError::new("Please verify your email before signing in"));
+        }
+
+        // Generate JWT
+        let token = server::generate_local_jwt(user_id)
+            .map_err(|e| ServerFnError::new(format!("Failed to generate token: {}", e)))?;
+
+        Ok(token)
+    }
+}
+
+/// Request password reset (always returns success for security)
+pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = email;
+        Err(ServerFnError::new("request_password_reset is server-only"))
+    }
+
+    #[cfg(feature = "server")]
+    {
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Look up user by email
+        let user = sqlx::query(
+            "select id, password_hash from users where email = $1"
+        )
+        .bind(&email)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // If user exists and has password_hash, send reset email
+        if let Some(user) = user {
+            let user_id: Uuid = user.get("id");
+            let password_hash: Option<String> = user.get("password_hash");
+
+            // Only send if user has a password (not OAuth-only)
+            if password_hash.is_some() {
+                // Generate reset token
+                let token = crate::email::generate_token();
+                let token_hash = crate::email::hash_token(&token);
+                let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(1);
+
+                // Store reset token
+                sqlx::query(
+                    "insert into password_resets (user_id, token_hash, expires_at) values ($1, $2, $3)"
+                )
+                .bind(user_id)
+                .bind(&token_hash)
+                .bind(expires_at)
+                .execute(pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+                // Send reset email (log errors but don't reveal to user)
+                if let Err(e) = crate::email::send_password_reset_email(&email, &token).await {
+                    eprintln!("Failed to send password reset email: {}", e);
+                }
+            }
+        }
+
+        // Always return success (security: don't reveal if email exists)
+        Ok(())
+    }
+}
+
+/// Reset password with token
+pub async fn reset_password(token: String, new_password: String) -> Result<(), ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = (token, new_password);
+        Err(ServerFnError::new("reset_password is server-only"))
+    }
+
+    #[cfg(feature = "server")]
+    {
+        // Validate new password
+        server::validate_password(&new_password)
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let token_hash = crate::email::hash_token(&token);
+        let pool = crate::pool()
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Look up reset token
+        let reset = sqlx::query(
+            "select user_id, expires_at from password_resets where token_hash = $1"
+        )
+        .bind(&token_hash)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let reset = reset.ok_or_else(|| {
+            ServerFnError::new("Reset link is invalid or has expired")
+        })?;
+
+        let user_id: Uuid = reset.get("user_id");
+        let expires_at: time::OffsetDateTime = reset.get("expires_at");
+
+        // Check expiration
+        if time::OffsetDateTime::now_utc() > expires_at {
+            return Err(ServerFnError::new("Reset link has expired"));
+        }
+
+        // Hash new password
+        use argon2::{Argon2, PasswordHasher};
+        use argon2::password_hash::SaltString;
+
+        let argon2 = Argon2::default();
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let password_hash = argon2
+            .hash_password(new_password.as_bytes(), &salt)
+            .map_err(|e| ServerFnError::new(format!("Password hashing failed: {}", e)))?
+            .to_string();
+
+        // Update password
+        sqlx::query("update users set password_hash = $1 where id = $2")
+            .bind(&password_hash)
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        // Delete reset token
+        sqlx::query("delete from password_resets where token_hash = $1")
+            .bind(&token_hash)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        Ok(())
     }
 }
