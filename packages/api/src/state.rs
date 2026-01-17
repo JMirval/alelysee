@@ -121,12 +121,30 @@ impl AppState {
             }
         };
 
-        Ok(Self {
+        let state = Self {
             db,
             email,
             storage,
             config,
-        })
+        };
+
+        // Log final mode summary
+        match state.config.mode {
+            AppMode::Local => {
+                tracing::info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                tracing::info!("🔧 LOCAL MODE ACTIVE");
+                tracing::info!("   No external dependencies required");
+                tracing::info!("   Database: .dev/local.db");
+                tracing::info!("   Uploads: .dev/uploads/");
+                tracing::info!("   Email: console output only");
+                tracing::info!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            }
+            AppMode::Production => {
+                tracing::info!("✓ Production mode initialized");
+            }
+        }
+
+        Ok(state)
     }
 
     /// Set the global AppState instance

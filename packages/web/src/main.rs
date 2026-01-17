@@ -108,6 +108,11 @@ fn init_server_state() {
     // Set global state
     api::state::AppState::set_global(state);
     eprintln!("✓ Server initialization complete");
+
+    // TODO: Configure Dioxus to serve static files from .dev/uploads/ for local mode
+    // This will require integration with Dioxus's server configuration once
+    // the API is finalized. For now, static file serving is handled by tower-http
+    // dependencies declared in Cargo.toml.
 }
 
 fn install_panic_hook() {

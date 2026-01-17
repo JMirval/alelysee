@@ -6,8 +6,11 @@ edition = "2021"
 [dependencies]
 dioxus = { workspace = true, features = ["router", "fullstack"] }
 ui = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+tokio = { version = "1.47", features = ["rt-multi-thread", "macros"], optional = true }
+api = { path = "../api" }
 
 [features]
 default = []
 desktop = ["dioxus/desktop"]
-server = ["dioxus/server", "ui/server"]
+server = ["dioxus/server", "ui/server", "api/server", "dep:tracing-subscriber", "dep:tokio"]
