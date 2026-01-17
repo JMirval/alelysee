@@ -10,7 +10,7 @@ mod echo;
 pub use echo::Echo;
 
 mod auth;
-pub use auth::{AuthBootstrap, AuthCallback, AuthGate, MePage, SignIn, SignOutButton};
+pub use auth::{AuthBootstrap, AuthCallback, AuthGate, MePage, SignIn, SignOutButton, SignUpForm, VerifyEmailPage, RequestPasswordResetForm, ResetPasswordConfirmForm};
 
 mod proposals;
 pub use proposals::{ProposalDetailPage, ProposalListPage, ProposalNewPage};

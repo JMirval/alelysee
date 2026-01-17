@@ -1,7 +1,8 @@
 use dioxus::prelude::*;
 
 use views::{
-    AuthCallback, AuthSignIn, Blog, Home, Me, ProfileEdit, ProgramDetail, ProgramNew, Programs,
+    AuthCallback, AuthSignIn, AuthSignUp, AuthVerify, AuthResetPassword, AuthResetConfirm,
+    Blog, Home, Me, ProfileEdit, ProgramDetail, ProgramNew, Programs,
     ProposalDetail, ProposalNew, Proposals,
 };
 
@@ -17,6 +18,14 @@ enum Route {
     Blog { id: i32 },
     #[route("/auth/signin")]
     AuthSignIn {},
+    #[route("/auth/signup")]
+    AuthSignUp {},
+    #[route("/auth/verify")]
+    AuthVerify {},
+    #[route("/auth/reset-password")]
+    AuthResetPassword {},
+    #[route("/auth/reset-password/confirm")]
+    AuthResetConfirm {},
     #[route("/auth/callback")]
     AuthCallback {},
     #[route("/me")]

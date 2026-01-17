@@ -33,3 +33,15 @@ pub use programs_detail::ProgramDetail;
 
 mod profile_edit;
 pub use profile_edit::ProfileEdit;
+
+mod auth_signup;
+pub use auth_signup::*;
+
+mod auth_verify;
+pub use auth_verify::*;
+
+mod auth_reset_password;
+pub use auth_reset_password::*;
+
+mod auth_reset_confirm;
+pub use auth_reset_confirm::*;
