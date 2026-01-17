@@ -1,6 +1,7 @@
 //! This crate contains all shared fullstack server functions.
 use dioxus::prelude::*;
 
+pub mod config;
 pub mod types;
 
 #[cfg(feature = "server")]
