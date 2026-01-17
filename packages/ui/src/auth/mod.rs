@@ -62,8 +62,8 @@ pub fn AuthGate(children: Element) -> Element {
 
 #[component]
 pub fn SignIn() -> Element {
-    let mut email = use_signal(|| String::new());
-    let mut password = use_signal(|| String::new());
+    let mut email = use_signal(String::new);
+    let mut password = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut id_token = use_context::<Signal<Option<String>>>();
     let lang = crate::use_lang()();
@@ -159,9 +159,9 @@ pub fn SignIn() -> Element {
 
 #[component]
 pub fn SignUpForm() -> Element {
-    let mut email = use_signal(|| String::new());
-    let mut password = use_signal(|| String::new());
-    let mut confirm_password = use_signal(|| String::new());
+    let mut email = use_signal(String::new);
+    let mut password = use_signal(String::new);
+    let mut confirm_password = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut success = use_signal(|| false);
     let lang = crate::use_lang()();
@@ -178,7 +178,9 @@ pub fn SignUpForm() -> Element {
             }
 
             if password() != confirm_password() {
-                error.set(Some(crate::t(lang, "auth.error.passwords_dont_match").to_string()));
+                error.set(Some(
+                    crate::t(lang, "auth.error.passwords_dont_match").to_string(),
+                ));
                 return;
             }
 
@@ -264,7 +266,7 @@ pub fn SignUpForm() -> Element {
 #[component]
 pub fn VerifyEmailPage() -> Element {
     let mut status = use_signal(|| "loading".to_string());
-    let mut error_msg = use_signal(|| String::new());
+    let mut error_msg = use_signal(String::new);
     let lang = crate::use_lang()();
 
     // Extract token from URL
@@ -281,9 +283,9 @@ pub fn VerifyEmailPage() -> Element {
             let token = query
                 .strip_prefix("?token=")
                 .or_else(|| {
-                    query.split('&').find_map(|pair| {
-                        pair.strip_prefix("token=")
-                    })
+                    query
+                        .split('&')
+                        .find_map(|pair| pair.strip_prefix("token="))
                 })
                 .unwrap_or("");
 
@@ -334,7 +336,7 @@ pub fn VerifyEmailPage() -> Element {
 
 #[component]
 pub fn RequestPasswordResetForm() -> Element {
-    let mut email = use_signal(|| String::new());
+    let mut email = use_signal(String::new);
     let mut submitted = use_signal(|| false);
     let lang = crate::use_lang()();
 
@@ -386,11 +388,11 @@ pub fn RequestPasswordResetForm() -> Element {
 
 #[component]
 pub fn ResetPasswordConfirmForm() -> Element {
-    let mut password = use_signal(|| String::new());
-    let mut confirm_password = use_signal(|| String::new());
+    let mut password = use_signal(String::new);
+    let mut confirm_password = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut success = use_signal(|| false);
-    let mut token = use_signal(|| String::new());
+    let mut token = use_signal(String::new);
     let lang = crate::use_lang()();
 
     // Extract token from URL
@@ -405,9 +407,9 @@ pub fn ResetPasswordConfirmForm() -> Element {
             let tok = query
                 .strip_prefix("?token=")
                 .or_else(|| {
-                    query.split('&').find_map(|pair| {
-                        pair.strip_prefix("token=")
-                    })
+                    query
+                        .split('&')
+                        .find_map(|pair| pair.strip_prefix("token="))
                 })
                 .unwrap_or("");
 
@@ -421,7 +423,9 @@ pub fn ResetPasswordConfirmForm() -> Element {
             error.set(None);
 
             if password() != confirm_password() {
-                error.set(Some(crate::t(lang, "auth.error.passwords_dont_match").to_string()));
+                error.set(Some(
+                    crate::t(lang, "auth.error.passwords_dont_match").to_string(),
+                ));
                 return;
             }
 

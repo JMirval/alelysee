@@ -56,7 +56,8 @@ pub async fn send_email(to: &str, subject: &str, html: &str, text: &str) -> Resu
 
 /// Send verification email
 pub async fn send_verification_email(to: &str, token: &str) -> Result<()> {
-    let base_url = std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let base_url =
+        std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let verify_url = format!("{}/auth/verify?token={}", base_url, token);
 
     let html = format!(
@@ -86,7 +87,8 @@ pub async fn send_verification_email(to: &str, token: &str) -> Result<()> {
 
 /// Send password reset email
 pub async fn send_password_reset_email(to: &str, token: &str) -> Result<()> {
-    let base_url = std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let base_url =
+        std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let reset_url = format!("{}/auth/reset-password/confirm?token={}", base_url, token);
 
     let html = format!(

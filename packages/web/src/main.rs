@@ -2,9 +2,9 @@ use dioxus::prelude::*;
 use std::env;
 
 use views::{
-    AuthCallback, AuthSignIn, AuthSignUp, AuthVerify, AuthResetPassword, AuthResetConfirm,
-    Blog, Home, Me, ProfileEdit, ProgramDetail, ProgramNew, Programs,
-    ProposalDetail, ProposalNew, Proposals,
+    AuthCallback, AuthResetConfirm, AuthResetPassword, AuthSignIn, AuthSignUp, AuthVerify, Blog,
+    Home, Me, ProfileEdit, ProgramDetail, ProgramNew, Programs, ProposalDetail, ProposalNew,
+    Proposals,
 };
 
 mod views;

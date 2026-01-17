@@ -83,7 +83,8 @@ mod server {
                 validation.set_issuer(&[expected_issuer()?]);
                 validation.set_audience(&[expected_audience()?]);
 
-                let token = decode::<Claims>(id_token, &key, &validation).context("jwt verify failed")?;
+                let token =
+                    decode::<Claims>(id_token, &key, &validation).context("jwt verify failed")?;
                 Ok(token.claims.sub)
             }
             Algorithm::HS256 => {
@@ -151,9 +152,7 @@ mod server {
 
     pub fn validate_password(password: &str) -> Result<(), anyhow::Error> {
         if password.len() < 8 {
-            return Err(anyhow::anyhow!(
-                "Password must be at least 8 characters"
-            ));
+            return Err(anyhow::anyhow!("Password must be at least 8 characters"));
         }
         if !password.chars().any(|c| c.is_uppercase()) {
             return Err(anyhow::anyhow!(
@@ -166,9 +165,7 @@ mod server {
             ));
         }
         if !password.chars().any(|c| c.is_numeric()) {
-            return Err(anyhow::anyhow!(
-                "Password must contain at least one number"
-            ));
+            return Err(anyhow::anyhow!("Password must contain at least one number"));
         }
         Ok(())
     }
@@ -184,8 +181,7 @@ mod server {
     }
 
     pub fn generate_local_jwt(user_id: Uuid) -> Result<String, anyhow::Error> {
-        let secret = std::env::var("JWT_SECRET")
-            .context("JWT_SECRET must be set")?;
+        let secret = std::env::var("JWT_SECRET").context("JWT_SECRET must be set")?;
 
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
@@ -210,8 +206,7 @@ mod server {
     }
 
     pub fn verify_local_jwt(token: &str) -> Result<Uuid, anyhow::Error> {
-        let secret = std::env::var("JWT_SECRET")
-            .context("JWT_SECRET must be set")?;
+        let secret = std::env::var("JWT_SECRET").context("JWT_SECRET must be set")?;
 
         let mut validation = jsonwebtoken::Validation::new(Algorithm::HS256);
         validation.set_issuer(&["alelysee"]);
@@ -386,8 +381,7 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         }
 
         // Validate password
-        server::validate_password(&password)
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        server::validate_password(&password).map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let pool = crate::pool()
             .await
@@ -405,8 +399,8 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         }
 
         // Hash password
-        use argon2::{Argon2, PasswordHasher};
         use argon2::password_hash::SaltString;
+        use argon2::{Argon2, PasswordHasher};
 
         let argon2 = Argon2::default();
         let salt = SaltString::generate(&mut rand::thread_rng());
@@ -442,7 +436,7 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
 
         // Store verification token
         sqlx::query(
-            "insert into email_verifications (user_id, token_hash, expires_at) values ($1, $2, $3)"
+            "insert into email_verifications (user_id, token_hash, expires_at) values ($1, $2, $3)",
         )
         .bind(user_id)
         .bind(&token_hash)
@@ -480,16 +474,15 @@ pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
 
         // Look up verification token
         let verification = sqlx::query(
-            "select user_id, expires_at from email_verifications where token_hash = $1"
+            "select user_id, expires_at from email_verifications where token_hash = $1",
         )
         .bind(&token_hash)
         .fetch_optional(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        let verification = verification.ok_or_else(|| {
-            ServerFnError::new("Verification link is invalid or has expired")
-        })?;
+        let verification = verification
+            .ok_or_else(|| ServerFnError::new("Verification link is invalid or has expired"))?;
 
         let user_id: Uuid = verification.get("user_id");
         let expires_at: time::OffsetDateTime = verification.get("expires_at");
@@ -532,13 +525,12 @@ pub async fn signin(email: String, password: String) -> Result<String, ServerFnE
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // Look up user by email
-        let user = sqlx::query(
-            "select id, password_hash, email_verified from users where email = $1"
-        )
-        .bind(&email)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let user =
+            sqlx::query("select id, password_hash, email_verified from users where email = $1")
+                .bind(&email)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let user = user.ok_or_else(|| ServerFnError::new("Invalid email or password"))?;
 
@@ -563,7 +555,9 @@ pub async fn signin(email: String, password: String) -> Result<String, ServerFnE
 
         // Check email verified
         if !email_verified {
-            return Err(ServerFnError::new("Please verify your email before signing in"));
+            return Err(ServerFnError::new(
+                "Please verify your email before signing in",
+            ));
         }
 
         // Generate JWT
@@ -589,13 +583,11 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // Look up user by email
-        let user = sqlx::query(
-            "select id, password_hash from users where email = $1"
-        )
-        .bind(&email)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let user = sqlx::query("select id, password_hash from users where email = $1")
+            .bind(&email)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // If user exists and has password_hash, send reset email
         if let Some(user) = user {
@@ -643,8 +635,7 @@ pub async fn reset_password(token: String, new_password: String) -> Result<(), S
     #[cfg(feature = "server")]
     {
         // Validate new password
-        server::validate_password(&new_password)
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        server::validate_password(&new_password).map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let token_hash = crate::email::hash_token(&token);
         let pool = crate::pool()
@@ -652,17 +643,15 @@ pub async fn reset_password(token: String, new_password: String) -> Result<(), S
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // Look up reset token
-        let reset = sqlx::query(
-            "select user_id, expires_at from password_resets where token_hash = $1"
-        )
-        .bind(&token_hash)
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+        let reset =
+            sqlx::query("select user_id, expires_at from password_resets where token_hash = $1")
+                .bind(&token_hash)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        let reset = reset.ok_or_else(|| {
-            ServerFnError::new("Reset link is invalid or has expired")
-        })?;
+        let reset =
+            reset.ok_or_else(|| ServerFnError::new("Reset link is invalid or has expired"))?;
 
         let user_id: Uuid = reset.get("user_id");
         let expires_at: time::OffsetDateTime = reset.get("expires_at");
@@ -673,8 +662,8 @@ pub async fn reset_password(token: String, new_password: String) -> Result<(), S
         }
 
         // Hash new password
-        use argon2::{Argon2, PasswordHasher};
         use argon2::password_hash::SaltString;
+        use argon2::{Argon2, PasswordHasher};
 
         let argon2 = Argon2::default();
         let salt = SaltString::generate(&mut rand::thread_rng());
