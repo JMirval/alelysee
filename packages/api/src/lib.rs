@@ -5,7 +5,7 @@ pub mod config;
 pub mod types;
 
 #[cfg(feature = "server")]
-mod db;
+pub mod db;
 
 #[cfg(feature = "server")]
 pub mod email;
