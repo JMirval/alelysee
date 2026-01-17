@@ -76,6 +76,32 @@ make docker-run
 - `/programs`, `/programs/new`, `/programs/:id`
 - `/api/health` - health check endpoint
 
+## Authentication
+
+Alelysee supports two authentication methods:
+
+### Email/Password (Primary)
+- Sign up: `/auth/signup`
+- Sign in: `/auth/signin`
+- Email verification required
+- Password reset: `/auth/reset-password`
+
+### OAuth (Currently Disabled in UI)
+- OAuth backend remains functional
+- UI temporarily hidden pending fixes
+- Uses JWT verification with JWKS
+
+### Required Environment Variables
+```
+JWT_SECRET=your-secret-key-min-32-chars
+SMTP_HOST=your-smtp-host
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-username
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM_EMAIL=noreply@yourdomain.com
+APP_BASE_URL=https://yourdomain.com
+```
+
 ## Monitoring & Analytics
 
 ### Health Checks & Metrics
