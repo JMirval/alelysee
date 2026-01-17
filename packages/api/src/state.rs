@@ -75,7 +75,9 @@ impl AppState {
                     tracing::info!("Seeding empty database with mock data...");
                     crate::db::seed::seed_database(pool).await?;
                     tracing::info!("✓ Database seeded successfully");
-                    tracing::info!("  Mock users: user1@local.dev, user2@local.dev, user3@local.dev");
+                    tracing::info!(
+                        "  Mock users: user1@local.dev, user2@local.dev, user3@local.dev"
+                    );
                     tracing::info!("  Password (all): Password123");
                 }
 
@@ -97,10 +99,7 @@ impl AppState {
 
         // Initialize storage service
         let storage: Arc<dyn StorageService> = match &config.storage {
-            StorageConfig::S3 {
-                bucket,
-                ..
-            } => {
+            StorageConfig::S3 { bucket, .. } => {
                 tracing::info!("Using S3 storage: bucket={}", bucket);
                 // Note: S3StorageService is currently a stub implementation
                 Arc::new(S3StorageService::new())
@@ -114,10 +113,7 @@ impl AppState {
                 // Ensure uploads directory exists
                 std::fs::create_dir_all(base_path)?;
 
-                Arc::new(FilesystemStorageService::new(
-                    &base_path,
-                    &serve_url,
-                ))
+                Arc::new(FilesystemStorageService::new(&base_path, &serve_url))
             }
         };
 

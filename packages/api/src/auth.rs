@@ -417,7 +417,7 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         let auth_subject = user_id.to_string();
 
         sqlx::query(
-            "insert into users (id, email, password_hash, auth_subject) values ($1, $2, $3, $4)"
+            "insert into users (id, email, password_hash, auth_subject) values ($1, $2, $3, $4)",
         )
         .bind(user_id.to_string())
         .bind(&email)
@@ -433,7 +433,8 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
 
         // Calculate expiration as ISO 8601 string (works with both Postgres and SQLite)
         let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(24);
-        let expires_at_str = expires_at.format(&time::format_description::well_known::Rfc3339)
+        let expires_at_str = expires_at
+            .format(&time::format_description::well_known::Rfc3339)
             .map_err(|e| ServerFnError::new(format!("Failed to format timestamp: {}", e)))?;
 
         // Store verification token
@@ -607,7 +608,8 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
 
                 // Calculate expiration as ISO 8601 string
                 let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(1);
-                let expires_at_str = expires_at.format(&time::format_description::well_known::Rfc3339)
+                let expires_at_str = expires_at
+                    .format(&time::format_description::well_known::Rfc3339)
                     .map_err(|e| {
                         eprintln!("Failed to format timestamp: {}", e);
                         e

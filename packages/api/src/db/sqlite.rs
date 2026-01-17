@@ -1,6 +1,6 @@
-use super::{Database, seed};
-use sqlx::{Pool, Any, sqlite::SqlitePoolOptions};
-use anyhow::{Result, Context};
+use super::{seed, Database};
+use anyhow::{Context, Result};
+use sqlx::{sqlite::SqlitePoolOptions, Any, Pool};
 use std::path::Path;
 
 pub struct SqliteDatabase {
@@ -11,7 +11,8 @@ impl SqliteDatabase {
     pub async fn connect(path: &str) -> Result<Self> {
         // Create .dev directory if it doesn't exist
         if let Some(parent) = Path::new(path).parent() {
-            tokio::fs::create_dir_all(parent).await
+            tokio::fs::create_dir_all(parent)
+                .await
                 .context("Failed to create .dev directory")?;
         }
 

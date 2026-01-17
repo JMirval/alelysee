@@ -1,11 +1,11 @@
-use sqlx::{Pool, Postgres, Sqlite, Any};
-use uuid::Uuid;
 use anyhow::Result;
+use sqlx::{Any, Pool, Postgres, Sqlite};
+use uuid::Uuid;
 
-pub mod postgres;
-pub mod sqlite;
-pub mod seed;
 mod compat;
+pub mod postgres;
+pub mod seed;
+pub mod sqlite;
 
 #[async_trait::async_trait]
 pub trait Database: Send + Sync {

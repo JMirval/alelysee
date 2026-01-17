@@ -1,9 +1,9 @@
-use sqlx::{Pool, Any};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHasher, SaltString},
     Argon2,
 };
+use sqlx::{Any, Pool};
 
 pub async fn seed_database(pool: &Pool<Any>) -> Result<()> {
     tracing::info!("Starting database seeding...");

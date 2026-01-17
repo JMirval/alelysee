@@ -39,7 +39,8 @@ impl EmailService for SmtpEmailService {
         let smtp_username = std::env::var("SMTP_USERNAME")?;
         let smtp_password = std::env::var("SMTP_PASSWORD")?;
         let smtp_from_email = std::env::var("SMTP_FROM_EMAIL")?;
-        let smtp_from_name = std::env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Alelysee".to_string());
+        let smtp_from_name =
+            std::env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Alelysee".to_string());
 
         let email = Message::builder()
             .from(format!("{} <{}>", smtp_from_name, smtp_from_email).parse()?)
@@ -88,7 +89,11 @@ impl EmailService for ConsoleEmailService {
 }
 
 /// Send verification email
-pub async fn send_verification_email(email_service: &dyn EmailService, to: &str, token: &str) -> Result<()> {
+pub async fn send_verification_email(
+    email_service: &dyn EmailService,
+    to: &str,
+    token: &str,
+) -> Result<()> {
     let base_url =
         std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let verify_url = format!("{}/auth/verify?token={}", base_url, token);
@@ -115,11 +120,17 @@ pub async fn send_verification_email(email_service: &dyn EmailService, to: &str,
         verify_url
     );
 
-    email_service.send_email(to, "Verify your email address", &html, &text).await
+    email_service
+        .send_email(to, "Verify your email address", &html, &text)
+        .await
 }
 
 /// Send password reset email
-pub async fn send_password_reset_email(email_service: &dyn EmailService, to: &str, token: &str) -> Result<()> {
+pub async fn send_password_reset_email(
+    email_service: &dyn EmailService,
+    to: &str,
+    token: &str,
+) -> Result<()> {
     let base_url =
         std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let reset_url = format!("{}/auth/reset-password/confirm?token={}", base_url, token);
@@ -147,7 +158,9 @@ pub async fn send_password_reset_email(email_service: &dyn EmailService, to: &st
         reset_url
     );
 
-    email_service.send_email(to, "Reset your password", &html, &text).await
+    email_service
+        .send_email(to, "Reset your password", &html, &text)
+        .await
 }
 
 #[cfg(test)]

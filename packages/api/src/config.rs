@@ -70,8 +70,8 @@ impl AppConfig {
         let jwt_secret = std::env::var("JWT_SECRET")
             .map_err(|_| "JWT_SECRET environment variable is required".to_string())?;
 
-        let app_base_url = std::env::var("APP_BASE_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".to_string());
+        let app_base_url =
+            std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
 
         let (database, email, storage) = match mode {
             AppMode::Local => {
@@ -91,9 +91,8 @@ impl AppConfig {
             }
             AppMode::Production => {
                 // Production mode: validate all required env vars
-                let database_url = std::env::var("DATABASE_URL").map_err(|_| {
-                    "DATABASE_URL is required in production mode".to_string()
-                })?;
+                let database_url = std::env::var("DATABASE_URL")
+                    .map_err(|_| "DATABASE_URL is required in production mode".to_string())?;
                 let database = DatabaseConfig::PostgreSQL { url: database_url };
 
                 let smtp_host = std::env::var("SMTP_HOST")
@@ -108,8 +107,8 @@ impl AppConfig {
                     .map_err(|_| "SMTP_PASSWORD is required in production mode".to_string())?;
                 let smtp_from_email = std::env::var("SMTP_FROM_EMAIL")
                     .map_err(|_| "SMTP_FROM_EMAIL is required in production mode".to_string())?;
-                let smtp_from_name = std::env::var("SMTP_FROM_NAME")
-                    .unwrap_or_else(|_| "Heliastes".to_string());
+                let smtp_from_name =
+                    std::env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Heliastes".to_string());
 
                 let email = EmailConfig::SMTP {
                     host: smtp_host,
@@ -126,12 +125,10 @@ impl AppConfig {
                     .map_err(|_| "STORAGE_ENDPOINT is required in production mode".to_string())?;
                 let region = std::env::var("STORAGE_REGION")
                     .map_err(|_| "STORAGE_REGION is required in production mode".to_string())?;
-                let access_key = std::env::var("STORAGE_ACCESS_KEY").map_err(|_| {
-                    "STORAGE_ACCESS_KEY is required in production mode".to_string()
-                })?;
-                let secret_key = std::env::var("STORAGE_SECRET_KEY").map_err(|_| {
-                    "STORAGE_SECRET_KEY is required in production mode".to_string()
-                })?;
+                let access_key = std::env::var("STORAGE_ACCESS_KEY")
+                    .map_err(|_| "STORAGE_ACCESS_KEY is required in production mode".to_string())?;
+                let secret_key = std::env::var("STORAGE_SECRET_KEY")
+                    .map_err(|_| "STORAGE_SECRET_KEY is required in production mode".to_string())?;
                 let media_base_url = std::env::var("MEDIA_BASE_URL").ok();
 
                 let storage = StorageConfig::S3 {

@@ -1,6 +1,6 @@
 use super::Database;
-use sqlx::{Pool, Postgres, Any, postgres::PgPoolOptions};
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
+use sqlx::{postgres::PgPoolOptions, Any, Pool, Postgres};
 
 pub struct PostgresDatabase {
     pool: Pool<Any>,
