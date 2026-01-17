@@ -263,6 +263,45 @@ pub fn t(lang: Lang, key: &str) -> String {
         (Lang::Fr, "auth.auth_error_prefix") => "Erreur d'authentification :".to_string(),
         (Lang::En, "auth.auth_error_prefix") => "Auth error:".to_string(),
 
+        // Email/password auth
+        (Lang::Fr, "auth.signup.title") => "Créer un compte".to_string(),
+        (Lang::Fr, "auth.signup.body") => "Inscrivez-vous pour commencer".to_string(),
+        (Lang::Fr, "auth.signup.email") => "Adresse e-mail".to_string(),
+        (Lang::Fr, "auth.signup.password") => "Mot de passe".to_string(),
+        (Lang::Fr, "auth.signup.confirm_password") => "Confirmer le mot de passe".to_string(),
+        (Lang::Fr, "auth.signup.submit") => "S'inscrire".to_string(),
+        (Lang::Fr, "auth.signup.success") => "Vérifiez votre e-mail pour activer votre compte".to_string(),
+        (Lang::Fr, "auth.signup.already_have_account") => "Vous avez déjà un compte ?".to_string(),
+        (Lang::Fr, "auth.signup.signin_link") => "Se connecter".to_string(),
+
+        (Lang::Fr, "auth.signin.email") => "Adresse e-mail".to_string(),
+        (Lang::Fr, "auth.signin.password") => "Mot de passe".to_string(),
+        (Lang::Fr, "auth.signin.submit") => "Se connecter".to_string(),
+        (Lang::Fr, "auth.signin.forgot_password") => "Mot de passe oublié ?".to_string(),
+        (Lang::Fr, "auth.signin.no_account") => "Pas de compte ?".to_string(),
+        (Lang::Fr, "auth.signin.signup_link") => "S'inscrire".to_string(),
+
+        (Lang::Fr, "auth.verify.title") => "Vérification de l'e-mail".to_string(),
+        (Lang::Fr, "auth.verify.success") => "E-mail vérifié ! Vous pouvez maintenant vous connecter.".to_string(),
+        (Lang::Fr, "auth.verify.error") => "La vérification a échoué. Ce lien est peut-être expiré.".to_string(),
+        (Lang::Fr, "auth.verify.signin_link") => "Aller à la connexion".to_string(),
+
+        (Lang::Fr, "auth.reset.title") => "Réinitialiser le mot de passe".to_string(),
+        (Lang::Fr, "auth.reset.body") => "Entrez votre e-mail pour recevoir un lien de réinitialisation".to_string(),
+        (Lang::Fr, "auth.reset.email") => "Adresse e-mail".to_string(),
+        (Lang::Fr, "auth.reset.submit") => "Envoyer le lien".to_string(),
+        (Lang::Fr, "auth.reset.success") => "Si cet e-mail est enregistré, vous recevrez des instructions".to_string(),
+        (Lang::Fr, "auth.reset.back_to_signin") => "Retour à la connexion".to_string(),
+
+        (Lang::Fr, "auth.reset_confirm.title") => "Nouveau mot de passe".to_string(),
+        (Lang::Fr, "auth.reset_confirm.password") => "Nouveau mot de passe".to_string(),
+        (Lang::Fr, "auth.reset_confirm.confirm_password") => "Confirmer le mot de passe".to_string(),
+        (Lang::Fr, "auth.reset_confirm.submit") => "Réinitialiser".to_string(),
+        (Lang::Fr, "auth.reset_confirm.success") => "Mot de passe réinitialisé avec succès".to_string(),
+
+        (Lang::Fr, "auth.error.passwords_dont_match") => "Les mots de passe ne correspondent pas".to_string(),
+        (Lang::Fr, "auth.error.invalid_email") => "Adresse e-mail invalide".to_string(),
+
         // Fallback: use French string if present, else show key.
         (Lang::En, k) => t(Lang::Fr, k),
         (Lang::Fr, _) => key.to_string(),
