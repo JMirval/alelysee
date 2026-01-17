@@ -17,6 +17,147 @@ impl AppMode {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum DatabaseConfig {
+    PostgreSQL { url: String },
+    SQLite { path: String },
+}
+
+#[derive(Debug, Clone)]
+pub enum EmailConfig {
+    SMTP {
+        host: String,
+        port: u16,
+        username: String,
+        password: String,
+        from_email: String,
+        from_name: String,
+    },
+    Console,
+}
+
+#[derive(Debug, Clone)]
+pub enum StorageConfig {
+    S3 {
+        bucket: String,
+        endpoint: String,
+        region: String,
+        access_key: String,
+        secret_key: String,
+        media_base_url: Option<String>,
+    },
+    Filesystem {
+        base_path: String,
+        serve_url: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct AppConfig {
+    pub mode: AppMode,
+    pub database: DatabaseConfig,
+    pub email: EmailConfig,
+    pub storage: StorageConfig,
+    pub jwt_secret: String,
+    pub app_base_url: String,
+}
+
+impl AppConfig {
+    pub fn from_env() -> Result<Self, String> {
+        let mode = AppMode::from_env();
+
+        // JWT_SECRET is required in all modes
+        let jwt_secret = std::env::var("JWT_SECRET")
+            .map_err(|_| "JWT_SECRET environment variable is required".to_string())?;
+
+        let app_base_url = std::env::var("APP_BASE_URL")
+            .unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+        let (database, email, storage) = match mode {
+            AppMode::Local => {
+                // Local mode: use SQLite, Console email, Filesystem storage
+                let database = DatabaseConfig::SQLite {
+                    path: ".dev/local.db".to_string(),
+                };
+
+                let email = EmailConfig::Console;
+
+                let storage = StorageConfig::Filesystem {
+                    base_path: ".dev/uploads".to_string(),
+                    serve_url: "http://localhost:8080/dev/uploads".to_string(),
+                };
+
+                (database, email, storage)
+            }
+            AppMode::Production => {
+                // Production mode: validate all required env vars
+                let database_url = std::env::var("DATABASE_URL").map_err(|_| {
+                    "DATABASE_URL is required in production mode".to_string()
+                })?;
+                let database = DatabaseConfig::PostgreSQL { url: database_url };
+
+                let smtp_host = std::env::var("SMTP_HOST")
+                    .map_err(|_| "SMTP_HOST is required in production mode".to_string())?;
+                let smtp_port = std::env::var("SMTP_PORT")
+                    .map_err(|_| "SMTP_PORT is required in production mode".to_string())?
+                    .parse::<u16>()
+                    .map_err(|_| "SMTP_PORT must be a valid port number".to_string())?;
+                let smtp_username = std::env::var("SMTP_USERNAME")
+                    .map_err(|_| "SMTP_USERNAME is required in production mode".to_string())?;
+                let smtp_password = std::env::var("SMTP_PASSWORD")
+                    .map_err(|_| "SMTP_PASSWORD is required in production mode".to_string())?;
+                let smtp_from_email = std::env::var("SMTP_FROM_EMAIL")
+                    .map_err(|_| "SMTP_FROM_EMAIL is required in production mode".to_string())?;
+                let smtp_from_name = std::env::var("SMTP_FROM_NAME")
+                    .unwrap_or_else(|_| "Heliastes".to_string());
+
+                let email = EmailConfig::SMTP {
+                    host: smtp_host,
+                    port: smtp_port,
+                    username: smtp_username,
+                    password: smtp_password,
+                    from_email: smtp_from_email,
+                    from_name: smtp_from_name,
+                };
+
+                let bucket = std::env::var("STORAGE_BUCKET")
+                    .map_err(|_| "STORAGE_BUCKET is required in production mode".to_string())?;
+                let endpoint = std::env::var("STORAGE_ENDPOINT")
+                    .map_err(|_| "STORAGE_ENDPOINT is required in production mode".to_string())?;
+                let region = std::env::var("STORAGE_REGION")
+                    .map_err(|_| "STORAGE_REGION is required in production mode".to_string())?;
+                let access_key = std::env::var("STORAGE_ACCESS_KEY").map_err(|_| {
+                    "STORAGE_ACCESS_KEY is required in production mode".to_string()
+                })?;
+                let secret_key = std::env::var("STORAGE_SECRET_KEY").map_err(|_| {
+                    "STORAGE_SECRET_KEY is required in production mode".to_string()
+                })?;
+                let media_base_url = std::env::var("MEDIA_BASE_URL").ok();
+
+                let storage = StorageConfig::S3 {
+                    bucket,
+                    endpoint,
+                    region,
+                    access_key,
+                    secret_key,
+                    media_base_url,
+                };
+
+                (database, email, storage)
+            }
+        };
+
+        Ok(Self {
+            mode,
+            database,
+            email,
+            storage,
+            jwt_secret,
+            app_base_url,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
