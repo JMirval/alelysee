@@ -1,13 +1,20 @@
 //! This crate contains all shared fullstack server functions.
 use dioxus::prelude::*;
 
+pub mod config;
 pub mod types;
 
 #[cfg(feature = "server")]
-mod db;
+pub mod db;
 
 #[cfg(feature = "server")]
 pub mod email;
+
+#[cfg(feature = "server")]
+pub mod storage;
+
+#[cfg(feature = "server")]
+pub mod state;
 
 #[cfg(feature = "server")]
 pub(crate) use db::pool;

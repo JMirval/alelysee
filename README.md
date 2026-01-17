@@ -34,6 +34,50 @@ Cross-platform **fullstack** Dioxus 0.7 app for political proposals and programs
    make dev
    ```
 
+## Local Development
+
+For development without external dependencies (no PostgreSQL, SMTP, or S3 required):
+
+1. **Set local mode:**
+   ```bash
+   cp .env.local.example .env
+   ```
+
+2. **Run the server:**
+   ```bash
+   dx serve --hot-reload --platform fullstack
+   ```
+
+3. **What you get:**
+   - SQLite database at `.dev/local.db` (auto-created)
+   - Auto-seeded mock users:
+     - `user1@local.dev` / `Password123`
+     - `user2@local.dev` / `Password123`
+     - `user3@local.dev` / `Password123`
+   - Email verification codes logged to console
+   - File uploads stored in `.dev/uploads/`
+   - No external service dependencies
+
+4. **Sign in:**
+   - Visit `http://localhost:8080/auth/signin`
+   - Use any mock user credentials above
+   - Start creating proposals and programs
+
+**Note:** Local mode is for development only. Use `APP_MODE=production` with proper PostgreSQL, SMTP, and S3 configuration for deployment.
+
+### Desktop & Mobile
+
+The desktop and mobile apps connect to the web server. Run them alongside the web server:
+
+```bash
+# In separate terminals
+dx serve --hot-reload --platform fullstack   # Web server
+dx serve --platform desktop                  # Desktop app
+dx serve --platform mobile                   # Mobile app
+```
+
+Both desktop and mobile apps will make API calls to `http://localhost:8080`.
+
 ## Repo Layout
 - `packages/web`: web client + fullstack server build
 - `packages/desktop`: desktop client (webview)

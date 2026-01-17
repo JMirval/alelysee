@@ -20,6 +20,8 @@ sqlx = { version = "0.8.3", optional = true, default-features = false, features 
     "migrate",
     "uuid",
     "time",
+    "sqlite",
+    "any",
 ] }
 tokio = { version = "1.47.1", optional = true, features = [
     "rt-multi-thread",
@@ -40,6 +42,8 @@ lettre = { version = "0.11", default-features = false, optional = true, features
 sha2 = "0.10"
 rand = "0.8"
 hex = "0.4"
+async-trait = "0.1"
+tracing = { version = "0.1", optional = true }
 
 [features]
 server = [
@@ -53,6 +57,7 @@ server = [
     "dep:aws-credential-types",
     "dep:aws-sdk-s3",
     "dep:lettre",
+    "dep:tracing",
     "uuid/v4",
     "uuid/rng-getrandom",
 ]
