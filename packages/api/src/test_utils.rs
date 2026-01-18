@@ -6,18 +6,26 @@ use crate::state::AppState;
 use crate::storage::filesystem::FilesystemStorageService;
 use sqlx::{Any, Pool};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use uuid::Uuid;
+
+// Global mutex to serialize test execution since AppState::set_global can only be called once
+static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
 pub struct TestContext {
     pub pool: Pool<Any>,
     pub state: Arc<AppState>,
     db_path: PathBuf,
     uploads_path: PathBuf,
+    _guard: MutexGuard<'static, ()>,
 }
 
 impl TestContext {
     pub async fn new() -> Self {
+        // Acquire the test mutex to serialize test execution
+        // This prevents multiple tests from calling AppState::set_global simultaneously
+        let guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+
         // Install sqlx drivers for Any pool
         sqlx::any::install_default_drivers();
 
@@ -74,16 +82,26 @@ impl TestContext {
             state,
             db_path,
             uploads_path,
+            _guard: guard,
         }
     }
 
     pub fn set_global(&self) {
-        AppState::set_global(self.state.clone());
+        // For tests, set thread-local state instead of global state
+        // This allows each test to have its own isolated AppState
+        crate::state::TEST_STATE.with(|s| {
+            *s.borrow_mut() = Some(self.state.clone());
+        });
     }
 }
 
 impl Drop for TestContext {
     fn drop(&mut self) {
+        // Clear thread-local state
+        crate::state::TEST_STATE.with(|s| {
+            *s.borrow_mut() = None;
+        });
+
         // Cleanup test database and uploads
         let _ = std::fs::remove_file(&self.db_path);
         let _ = std::fs::remove_dir_all(&self.uploads_path);

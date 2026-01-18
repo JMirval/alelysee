@@ -165,6 +165,14 @@ impl AppState {
     ///
     /// Panics if called before set_global.
     pub fn global() -> Arc<Self> {
+        // In tests, check thread-local state first
+        #[cfg(feature = "server")]
+        {
+            if let Some(test_state) = TEST_STATE.with(|s| s.borrow().clone()) {
+                return test_state;
+            }
+        }
+
         STATE
             .get()
             .expect("AppState::global called before set_global")
@@ -173,4 +181,10 @@ impl AppState {
 }
 
 /// Global state storage using OnceLock for thread-safe initialization
-static STATE: OnceLock<Arc<AppState>> = OnceLock::new();
+pub(crate) static STATE: OnceLock<Arc<AppState>> = OnceLock::new();
+
+/// Thread-local state override for testing
+#[cfg(feature = "server")]
+thread_local! {
+    pub(crate) static TEST_STATE: std::cell::RefCell<Option<Arc<AppState>>> = std::cell::RefCell::new(None);
+}

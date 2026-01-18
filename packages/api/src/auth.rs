@@ -545,7 +545,15 @@ pub async fn signin(email: String, password: String) -> Result<String, ServerFnE
 
         let user_id = crate::db::uuid_from_db(&user.get::<String, _>("id"))?;
         let password_hash: Option<String> = user.get("password_hash");
-        let email_verified: bool = user.get("email_verified");
+        // SQLite stores booleans as integers (0 = false, 1 = true)
+        let email_verified: bool = match user.try_get::<bool, _>("email_verified") {
+            Ok(v) => v,
+            Err(_) => {
+                // Fallback for SQLite: treat integer as boolean
+                let v: i64 = user.get("email_verified");
+                v != 0
+            }
+        };
 
         // Check if user has password (not OAuth-only)
         let password_hash = password_hash.ok_or_else(|| {
