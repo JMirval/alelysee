@@ -109,5 +109,5 @@ pub use proposals::{create_proposal, get_proposal, list_proposals, update_propos
 pub use uploads::{create_video_upload_intent, finalize_video_upload, list_videos};
 pub use votes::set_vote;
 
-#[cfg(all(test, feature = "server"))]
+#[cfg(feature = "server")]
 pub mod test_utils;

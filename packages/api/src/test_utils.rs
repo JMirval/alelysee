@@ -4,7 +4,6 @@ use crate::db::Database;
 use crate::email::ConsoleEmailService;
 use crate::state::AppState;
 use crate::storage::filesystem::FilesystemStorageService;
-use anyhow::Result;
 use sqlx::{Any, Pool};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,6 +18,9 @@ pub struct TestContext {
 
 impl TestContext {
     pub async fn new() -> Self {
+        // Install sqlx drivers for Any pool
+        sqlx::any::install_default_drivers();
+
         let test_id = Uuid::new_v4();
         let db_path = PathBuf::from(format!(".test-{}.db", test_id));
         let uploads_path = PathBuf::from(format!(".test-uploads-{}", test_id));
@@ -29,7 +31,7 @@ impl TestContext {
         std::env::set_var("APP_BASE_URL", "http://localhost:8080");
 
         // Create SQLite database
-        let database = SqliteDatabase::connect(db_path.to_string_lossy().to_string())
+        let database = SqliteDatabase::connect(&db_path.to_string_lossy())
             .await
             .expect("Failed to create test database");
 
