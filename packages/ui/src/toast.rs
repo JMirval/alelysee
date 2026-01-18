@@ -23,21 +23,23 @@ pub struct Toasts {
 
 impl Toasts {
     pub fn push(&self, title: String, body: Option<String>, kind: ToastKind) -> u64 {
-        let id = self.next_id();
-        self.next_id.set(id + 1);
+        let mut next_id = self.next_id;
+        let id = (next_id)();
+        next_id.set(id + 1);
         let toast = Toast {
             id,
             title,
             body,
             kind,
         };
-        self.toasts.with_mut(|items| items.push(toast));
+        let mut toasts = self.toasts;
+        toasts.with_mut(|items| items.push(toast));
         id
     }
 
     pub fn dismiss(&self, id: u64) {
-        self.toasts
-            .with_mut(|items| items.retain(|toast| toast.id != id));
+        let mut toasts = self.toasts;
+        toasts.with_mut(|items| items.retain(|toast| toast.id != id));
     }
 
     pub fn error(&self, title: String, body: Option<String>) {
@@ -74,19 +76,15 @@ pub fn ToastProvider(children: Element) -> Element {
 fn ToastViewport(toasts: Signal<Vec<Toast>>) -> Element {
     let items = toasts();
     rsx! {
-        div {
-            class: "toast_region",
-            role: "status",
-            "aria-live": "polite",
+        div { class: "toast_region", role: "status", "aria-live": "polite",
             for toast in items.iter() {
-                let id = toast.id;
-                let kind_class = match toast.kind {
-                    ToastKind::Error => "toast toast_error",
-                    ToastKind::Info => "toast toast_info",
-                    ToastKind::Success => "toast toast_success",
-                };
-                let toasts = toasts.clone();
-                div { key: "{id}", class: "{kind_class}",
+                div {
+                    key: "{toast.id}",
+                    class: match toast.kind {
+                        ToastKind::Error => "toast toast_error",
+                        ToastKind::Info => "toast toast_info",
+                        ToastKind::Success => "toast toast_success",
+                    },
                     div { class: "toast_content",
                         div { class: "toast_title", "{toast.title}" }
                         if let Some(body) = &toast.body {
@@ -95,8 +93,12 @@ fn ToastViewport(toasts: Signal<Vec<Toast>>) -> Element {
                     }
                     button {
                         class: "toast_close",
-                        onclick: move |_| {
-                            toasts.with_mut(|items| items.retain(|t| t.id != id));
+                        onclick: {
+                            let id = toast.id;
+                            let mut toasts = toasts;
+                            move |_| {
+                                toasts.with_mut(|items| items.retain(|t| t.id != id));
+                            }
                         },
                         "Dismiss"
                     }

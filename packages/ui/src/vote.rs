@@ -29,6 +29,7 @@ pub fn VoteWidget(
 
     let toasts_for_effect = toasts.clone();
     use_effect(move || {
+        let toasts = toasts_for_effect.clone();
         let token = id_token();
         let tid = target_key();
         let initial_score = initial_score;
@@ -39,7 +40,7 @@ pub fn VoteWidget(
                         score.set(state.score);
                         my_vote.set(state.my_vote);
                     }
-                    Err(e) => toasts_for_effect.error(
+                    Err(e) => toasts.error(
                         crate::t(lang, "toast.vote_save_title"),
                         Some(format!("{} {e}", crate::t(lang, "toast.details"))),
                     ),
@@ -54,9 +55,6 @@ pub fn VoteWidget(
     let toasts_up = toasts.clone();
     let toasts_down = toasts.clone();
     let toasts_clear = toasts.clone();
-    let toasts_required_up = toasts.clone();
-    let toasts_required_down = toasts.clone();
-    let toasts_required_clear = toasts;
 
     rsx! {
         div { class: "vote_widget",
@@ -66,19 +64,17 @@ pub fn VoteWidget(
                     onclick: move |_| {
                         let token = id_token().unwrap_or_default();
                         if token.trim().is_empty() {
-                            toasts_required_up.error(
-                                crate::t(lang, "toast.vote_required_title"),
-                                Some(crate::t(lang, "common.signin_to_vote")),
-                            );
+                            toasts_up
+                                .error(
+                                    crate::t(lang, "toast.vote_required_title"),
+                                    Some(crate::t(lang, "common.signin_to_vote")),
+                                );
                             return;
                         }
-
-                        // optimistic toggle
                         let current = my_vote();
                         let desired = if current == Some(1) { 0 } else { 1 };
                         let mut next_score = score();
                         if let Some(c) = current {
-
                             next_score -= c as i64;
                         }
                         if desired != 0 {
@@ -87,16 +83,20 @@ pub fn VoteWidget(
                         score.set(next_score);
                         my_vote.set(if desired == 0 { None } else { Some(desired) });
                         let tid = target_id_up.clone();
+                        let toasts = toasts_up.clone();
                         spawn(async move {
                             match api::set_vote(token, target_type, tid, desired).await {
                                 Ok(state) => {
                                     score.set(state.score);
                                     my_vote.set(state.my_vote);
                                 }
-                                Err(e) => toasts_up.error(
-                                    crate::t(lang, "toast.vote_save_title"),
-                                    Some(format!("{} {e}", crate::t(lang, "toast.details"))),
-                                ),
+                                Err(e) => {
+                                    toasts
+                                        .error(
+                                            crate::t(lang, "toast.vote_save_title"),
+                                            Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                                        );
+                                }
                             }
                         });
                     },
@@ -108,19 +108,17 @@ pub fn VoteWidget(
                     onclick: move |_| {
                         let token = id_token().unwrap_or_default();
                         if token.trim().is_empty() {
-                            toasts_required_down.error(
-                                crate::t(lang, "toast.vote_required_title"),
-                                Some(crate::t(lang, "common.signin_to_vote")),
-                            );
+                            toasts_down
+                                .error(
+                                    crate::t(lang, "toast.vote_required_title"),
+                                    Some(crate::t(lang, "common.signin_to_vote")),
+                                );
                             return;
                         }
-
-                        // optimistic toggle
                         let current = my_vote();
                         let desired = if current == Some(-1) { 0 } else { -1 };
                         let mut next_score = score();
                         if let Some(c) = current {
-
                             next_score -= c as i64;
                         }
                         if desired != 0 {
@@ -129,16 +127,20 @@ pub fn VoteWidget(
                         score.set(next_score);
                         my_vote.set(if desired == 0 { None } else { Some(desired) });
                         let tid = target_id_down.clone();
+                        let toasts = toasts_down.clone();
                         spawn(async move {
                             match api::set_vote(token, target_type, tid, desired).await {
                                 Ok(state) => {
                                     score.set(state.score);
                                     my_vote.set(state.my_vote);
                                 }
-                                Err(e) => toasts_down.error(
-                                    crate::t(lang, "toast.vote_save_title"),
-                                    Some(format!("{} {e}", crate::t(lang, "toast.details"))),
-                                ),
+                                Err(e) => {
+                                    toasts
+                                        .error(
+                                            crate::t(lang, "toast.vote_save_title"),
+                                            Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                                        );
+                                }
                             }
                         });
                     },
@@ -149,13 +151,13 @@ pub fn VoteWidget(
                     onclick: move |_| {
                         let token = id_token().unwrap_or_default();
                         if token.trim().is_empty() {
-                            toasts_required_clear.error(
-                                crate::t(lang, "toast.vote_required_title"),
-                                Some(crate::t(lang, "common.signin_to_vote")),
-                            );
+                            toasts_clear
+                                .error(
+                                    crate::t(lang, "toast.vote_required_title"),
+                                    Some(crate::t(lang, "common.signin_to_vote")),
+                                );
                             return;
                         }
-                        // optimistic clear
                         let current = my_vote();
                         let mut next_score = score();
                         if let Some(c) = current {
@@ -163,18 +165,21 @@ pub fn VoteWidget(
                         }
                         score.set(next_score);
                         my_vote.set(None);
-
                         let tid = target_id_clear.clone();
+                        let toasts = toasts_clear.clone();
                         spawn(async move {
                             match api::set_vote(token, target_type, tid, 0).await {
                                 Ok(state) => {
                                     score.set(state.score);
                                     my_vote.set(state.my_vote);
                                 }
-                                Err(e) => toasts_clear.error(
-                                    crate::t(lang, "toast.vote_save_title"),
-                                    Some(format!("{} {e}", crate::t(lang, "toast.details"))),
-                                ),
+                                Err(e) => {
+                                    toasts
+                                        .error(
+                                            crate::t(lang, "toast.vote_save_title"),
+                                            Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                                        );
+                                }
                             }
                         });
                     },
