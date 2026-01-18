@@ -68,7 +68,7 @@ build-mobile: ## Build mobile app
 # =======
 
 test: ## Run all tests
-	cargo test --workspace
+	cargo test --workspace --exclude e2e
 
 test-ci: ## Run tests for CI (server-focused, excludes desktop/mobile)
 	cargo test --workspace --exclude desktop --exclude mobile

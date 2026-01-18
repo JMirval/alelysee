@@ -53,7 +53,10 @@ pub fn I18nProvider(children: Element) -> Element {
         });
     });
 
-    rsx! { {children} }
+    rsx! {
+        {children}
+
+    }
 }
 
 pub fn use_lang() -> Signal<Lang> {
@@ -90,8 +93,8 @@ pub fn t(lang: Lang, key: &str) -> String {
         (Lang::En, "nav.programs") => "Programs".to_string(),
         (Lang::Fr, "nav.profile") => "Profil".to_string(),
         (Lang::En, "nav.profile") => "Profile".to_string(),
-        (Lang::Fr, "nav.signin") => "Se connecter / S'inscrire".to_string(),
-        (Lang::En, "nav.signin") => "Sign in / Sign up".to_string(),
+        (Lang::Fr, "nav.signin") => "Connexion".to_string(),
+        (Lang::En, "nav.signin") => "Sign in".to_string(),
         (Lang::Fr, "nav.edit_profile") => "Modifier le profil".to_string(),
         (Lang::En, "nav.edit_profile") => "Edit profile".to_string(),
         (Lang::Fr, "nav.signout") => "Se déconnecter".to_string(),

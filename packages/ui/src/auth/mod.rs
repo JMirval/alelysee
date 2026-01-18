@@ -144,7 +144,9 @@ pub fn SignIn() -> Element {
                     }
                 }
 
-                button { class: "btn primary", r#type: "submit", {crate::t(lang, "auth.signin.submit")} }
+                button { class: "btn primary", r#type: "submit",
+                    {crate::t(lang, "auth.signin.submit")}
+                }
             }
 
             p { class: "hint",
@@ -157,12 +159,12 @@ pub fn SignIn() -> Element {
                 a { href: "/auth/signup", {crate::t(lang, "auth.signin.signup_link")} }
             }
 
-            // OAuth temporarily disabled - uncomment when fixed
-            // match cfg() {
-            //     None => rsx! { p { {crate::t(lang, "common.loading")} } },
-            //     Some(Err(err)) => rsx! { p { class: "error", {err} } },
-            //     Some(Ok(cfg)) => { ... }
-            // }
+        // OAuth temporarily disabled - uncomment when fixed
+        // match cfg() {
+        //     None => rsx! { p { {crate::t(lang, "common.loading")} } },
+        //     Some(Err(err)) => rsx! { p { class: "error", {err} } },
+        //     Some(Ok(cfg)) => { ... }
+        // }
         }
     }
 }
@@ -249,7 +251,9 @@ pub fn SignUpForm() -> Element {
                     }
 
                     div { class: "form-group",
-                        label { r#for: "confirm_password", {crate::t(lang, "auth.signup.confirm_password")} }
+                        label { r#for: "confirm_password",
+                            {crate::t(lang, "auth.signup.confirm_password")}
+                        }
                         input {
                             r#type: "password",
                             id: "confirm_password",
@@ -260,7 +264,9 @@ pub fn SignUpForm() -> Element {
                         }
                     }
 
-                    button { class: "btn primary", r#type: "submit", {crate::t(lang, "auth.signup.submit")} }
+                    button { class: "btn primary", r#type: "submit",
+                        {crate::t(lang, "auth.signup.submit")}
+                    }
                 }
 
                 p { class: "hint",
@@ -313,7 +319,9 @@ pub fn VerifyEmailPage(token: Option<String>) -> Element {
             } else if status() == "success" {
                 p { class: "success", {crate::t(lang, "auth.verify.success")} }
                 p {
-                    a { class: "btn primary", href: "/auth/signin", {crate::t(lang, "auth.verify.signin_link")} }
+                    a { class: "btn primary", href: "/auth/signin",
+                        {crate::t(lang, "auth.verify.signin_link")}
+                    }
                 }
             } else {
                 p { class: "error", {crate::t(lang, "auth.verify.error")} }
@@ -369,7 +377,9 @@ pub fn RequestPasswordResetForm() -> Element {
                         }
                     }
 
-                    button { class: "btn primary", r#type: "submit", {crate::t(lang, "auth.reset.submit")} }
+                    button { class: "btn primary", r#type: "submit",
+                        {crate::t(lang, "auth.reset.submit")}
+                    }
                 }
 
                 p { class: "hint",
@@ -443,7 +453,9 @@ pub fn ResetPasswordConfirmForm() -> Element {
             if success() {
                 p { class: "success", {crate::t(lang, "auth.reset_confirm.success")} }
                 p {
-                    a { class: "btn primary", href: "/auth/signin", {crate::t(lang, "auth.verify.signin_link")} }
+                    a { class: "btn primary", href: "/auth/signin",
+                        {crate::t(lang, "auth.verify.signin_link")}
+                    }
                 }
             } else {
                 form { onsubmit: on_submit,
@@ -464,7 +476,9 @@ pub fn ResetPasswordConfirmForm() -> Element {
                     }
 
                     div { class: "form-group",
-                        label { r#for: "confirm_password", {crate::t(lang, "auth.reset_confirm.confirm_password")} }
+                        label { r#for: "confirm_password",
+                            {crate::t(lang, "auth.reset_confirm.confirm_password")}
+                        }
                         input {
                             r#type: "password",
                             id: "confirm_password",
@@ -475,7 +489,9 @@ pub fn ResetPasswordConfirmForm() -> Element {
                         }
                     }
 
-                    button { class: "btn primary", r#type: "submit", {crate::t(lang, "auth.reset_confirm.submit")} }
+                    button { class: "btn primary", r#type: "submit",
+                        {crate::t(lang, "auth.reset_confirm.submit")}
+                    }
                 }
             }
         }

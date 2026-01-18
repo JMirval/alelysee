@@ -14,9 +14,39 @@ pub fn VoteWidget(
     let mut score = use_signal(move || initial_score);
     let mut my_vote = use_signal(|| None::<i16>);
     let mut err = use_signal(String::new);
+    let target_id_initial = target_id.clone();
+    let mut target_key = use_signal(move || target_id_initial.clone());
+    let target_id_value = target_id.clone();
     let target_id_up = target_id.clone();
     let target_id_down = target_id.clone();
     let target_id_clear = target_id;
+
+    if target_key() != target_id_value {
+        target_key.set(target_id_value.clone());
+        score.set(initial_score);
+        my_vote.set(None);
+        err.set(String::new());
+    }
+
+    use_effect(move || {
+        let token = id_token();
+        let tid = target_key();
+        let initial_score = initial_score;
+        spawn(async move {
+            if let Some(token) = token {
+                match api::get_vote_state(token, target_type, tid).await {
+                    Ok(state) => {
+                        score.set(state.score);
+                        my_vote.set(state.my_vote);
+                    }
+                    Err(e) => err.set(format!("{e}")),
+                }
+            } else {
+                score.set(initial_score);
+                my_vote.set(None);
+            }
+        });
+    });
 
     rsx! {
         div { class: "vote_widget",
@@ -35,15 +65,22 @@ pub fn VoteWidget(
                         let current = my_vote();
                         let desired = if current == Some(1) { 0 } else { 1 };
                         let mut next_score = score();
-                        if let Some(c) = current { next_score -= c as i64; }
-                        if desired != 0 { next_score += desired as i64; }
+                        if let Some(c) = current {
+
+                            next_score -= c as i64;
+                        }
+                        if desired != 0 {
+                            next_score += desired as i64;
+                        }
                         score.set(next_score);
                         my_vote.set(if desired == 0 { None } else { Some(desired) });
-
                         let tid = target_id_up.clone();
                         spawn(async move {
                             match api::set_vote(token, target_type, tid, desired).await {
-                                Ok(state) => { score.set(state.score); my_vote.set(state.my_vote); }
+                                Ok(state) => {
+                                    score.set(state.score);
+                                    my_vote.set(state.my_vote);
+                                }
                                 Err(e) => err.set(format!("{e}")),
                             }
                         });
@@ -65,15 +102,22 @@ pub fn VoteWidget(
                         let current = my_vote();
                         let desired = if current == Some(-1) { 0 } else { -1 };
                         let mut next_score = score();
-                        if let Some(c) = current { next_score -= c as i64; }
-                        if desired != 0 { next_score += desired as i64; }
+                        if let Some(c) = current {
+
+                            next_score -= c as i64;
+                        }
+                        if desired != 0 {
+                            next_score += desired as i64;
+                        }
                         score.set(next_score);
                         my_vote.set(if desired == 0 { None } else { Some(desired) });
-
                         let tid = target_id_down.clone();
                         spawn(async move {
                             match api::set_vote(token, target_type, tid, desired).await {
-                                Ok(state) => { score.set(state.score); my_vote.set(state.my_vote); }
+                                Ok(state) => {
+                                    score.set(state.score);
+                                    my_vote.set(state.my_vote);
+                                }
                                 Err(e) => err.set(format!("{e}")),
                             }
                         });
