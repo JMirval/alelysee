@@ -97,11 +97,14 @@ impl AppConfig {
         let (database, email, storage) = match mode {
             AppMode::Local => {
                 // Local mode: use SQLite, Console email, Filesystem storage
-                let database = DatabaseConfig::SQLite {
-                    path: workspace_root
+                let database_path = std::env::var("LOCAL_DB_PATH").unwrap_or_else(|_| {
+                    workspace_root
                         .join(".dev/local.db")
                         .to_string_lossy()
-                        .to_string(),
+                        .to_string()
+                });
+                let database = DatabaseConfig::SQLite {
+                    path: database_path,
                 };
 
                 let email = EmailConfig::Console;
