@@ -202,9 +202,11 @@ fn App() -> Element {
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
         ui::CivicTheme {}
-        ui::I18nProvider {
-            ui::AuthBootstrap {}
-            Router::<Route> {}
+        ui::ToastProvider {
+            ui::I18nProvider {
+                ui::AuthBootstrap {}
+                Router::<Route> {}
+            }
         }
     }
 }

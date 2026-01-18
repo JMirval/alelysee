@@ -5,7 +5,22 @@ const FEED_CSS: Asset = asset!("/assets/styling/feed.css");
 #[component]
 pub fn ProposalListPage() -> Element {
     let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
     let proposals = use_resource(|| async move { api::list_proposals(50).await });
+    let mut load_error = use_signal(|| None::<String>);
+
+    use_effect(move || {
+        let err = proposals().and_then(|res| res.err()).map(|e| e.to_string());
+        if err.as_ref() != load_error().as_ref() {
+            if let Some(message) = &err {
+                toasts.error(
+                    crate::t(lang, "toast.load_proposals_title"),
+                    Some(format!("{} {message}", crate::t(lang, "toast.details"))),
+                );
+            }
+            load_error.set(err);
+        }
+    });
 
     rsx! {
         document::Link { rel: "stylesheet", href: FEED_CSS }
@@ -27,7 +42,7 @@ pub fn ProposalListPage() -> Element {
                         }
                     }
                 },
-                Some(Err(err)) => rsx! { p { class: "error", {format!("{} {err}", crate::t(lang, "common.error_prefix"))} } },
+                Some(Err(_)) => rsx! { p { class: "hint", {crate::t(lang, "common.error_try_again")} } },
                 Some(Ok(items)) => rsx! {
                     if items.is_empty() {
                         p { class: "hint", {crate::t(lang, "common.no_proposals_yet")} }
@@ -61,6 +76,7 @@ pub fn ProposalListPage() -> Element {
 #[component]
 pub fn ProposalNewPage() -> Element {
     let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
 
@@ -125,10 +141,14 @@ pub fn ProposalNewPage() -> Element {
                             let b = body();
                             let tg = tags();
                             let lang = lang;
+                            let toasts = toasts.clone();
                             spawn(async move {
                                 match api::create_proposal(token, t, s, b, tg).await {
                                     Ok(p) => status.set(format!("{} /proposals/{}", crate::t(lang, "proposals.created_open"), p.id)),
-                                    Err(e) => status.set(format!("{} {e}", crate::t(lang, "common.error_prefix"))),
+                                    Err(e) => toasts.error(
+                                        crate::t(lang, "toast.create_proposal_title"),
+                                        Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                                    ),
                                 }
                             });
                         },
@@ -147,9 +167,24 @@ pub fn ProposalNewPage() -> Element {
 #[component]
 pub fn ProposalDetailPage(id: String) -> Element {
     let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
     let proposal = use_resource(move || {
         let id = id.clone();
         async move { api::get_proposal(id).await }
+    });
+    let mut load_error = use_signal(|| None::<String>);
+
+    use_effect(move || {
+        let err = proposal().and_then(|res| res.err()).map(|e| e.to_string());
+        if err.as_ref() != load_error().as_ref() {
+            if let Some(message) = &err {
+                toasts.error(
+                    crate::t(lang, "toast.load_proposal_title"),
+                    Some(format!("{} {message}", crate::t(lang, "toast.details"))),
+                );
+            }
+            load_error.set(err);
+        }
     });
 
     rsx! {
@@ -161,7 +196,7 @@ pub fn ProposalDetailPage(id: String) -> Element {
             }
             match proposal() {
                 None => rsx! { p { {crate::t(lang, "common.loading")} } },
-                Some(Err(err)) => rsx! { p { class: "error", {format!("{} {err}", crate::t(lang, "common.error_prefix"))} } },
+                Some(Err(_)) => rsx! { p { class: "hint", {crate::t(lang, "common.error_try_again")} } },
                 Some(Ok(p)) => rsx! {
                     div { class: "panel",
                         h1 { "{p.title}" }

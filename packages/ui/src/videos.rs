@@ -6,6 +6,8 @@ use api::types::ContentTargetType;
 pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
+    let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
 
     let cfg = use_resource(|| async move { api::public_config().await });
     let target_id_for_list = target_id.clone();
@@ -13,8 +15,23 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
         let target_id = target_id_for_list.clone();
         async move { api::list_videos(target_type, target_id, 20).await }
     });
+    let mut load_error = use_signal(|| None::<String>);
 
     let mut status = use_signal(String::new);
+
+    let toasts_for_load = toasts.clone();
+    use_effect(move || {
+        let err = videos().and_then(|res| res.err()).map(|e| e.to_string());
+        if err.as_ref() != load_error().as_ref() {
+            if let Some(message) = &err {
+                toasts_for_load.error(
+                    crate::t(lang, "toast.load_videos_title"),
+                    Some(format!("{} {message}", crate::t(lang, "toast.details"))),
+                );
+            }
+            load_error.set(err);
+        }
+    });
 
     rsx! {
         div { class: "panel",
@@ -22,7 +39,7 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
 
             match videos() {
                 None => rsx! { p { "Loading…" } },
-                Some(Err(e)) => rsx! { p { class: "error", "Error: {e}" } },
+                Some(Err(_)) => rsx! { p { class: "hint", {crate::t(lang, "common.error_try_again")} } },
                 Some(Ok(items)) => rsx! {
                     if items.is_empty() {
                         p { class: "hint", "No videos yet." }
@@ -82,6 +99,7 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
 
                             let token = token.clone();
                             let tid = target_id.clone();
+                            let toasts = toasts.clone();
                             spawn(async move {
                                 // Read file metadata from JS
                                 let meta = document::eval(
@@ -98,7 +116,10 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                 .unwrap_or_default();
 
                                 if meta.trim().is_empty() {
-                                    status.set("Select a video file first.".to_string());
+                                    toasts.error(
+                                        crate::t(lang, "toast.video_missing_file_title"),
+                                        Some(crate::t(lang, "toast.try_again")),
+                                    );
                                     return;
                                 }
 
@@ -117,7 +138,10 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                 {
                                     Ok(i) => i,
                                     Err(e) => {
-                                        status.set(format!("Intent error: {e}"));
+                                        toasts.error(
+                                            crate::t(lang, "toast.upload_video_title"),
+                                            Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                                        );
                                         return;
                                     }
                                 };
@@ -149,7 +173,10 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                     .unwrap_or_else(|| "upload_eval_failed".to_string());
 
                                 if upload_res != "ok" {
-                                    status.set(format!("Upload failed: {upload_res}"));
+                                    toasts.error(
+                                        crate::t(lang, "toast.upload_video_title"),
+                                        Some(format!("{} {upload_res}", crate::t(lang, "toast.details"))),
+                                    );
                                     return;
                                 }
 
@@ -168,7 +195,10 @@ pub fn VideoSection(target_type: ContentTargetType, target_id: String) -> Elemen
                                         status.set("Uploaded.".to_string());
                                         videos.restart();
                                     }
-                                    Err(e) => status.set(format!("Finalize error: {e}")),
+                                    Err(e) => toasts.error(
+                                        crate::t(lang, "toast.upload_video_title"),
+                                        Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                                    ),
                                 }
                             });
                         },

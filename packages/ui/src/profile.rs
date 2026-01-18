@@ -6,6 +6,8 @@ const FEED_CSS: Asset = asset!("/assets/styling/feed.css");
 pub fn ProfileEditPage() -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
+    let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
 
     let mut display_name = use_signal(String::new);
     let mut bio = use_signal(String::new);
@@ -45,6 +47,8 @@ pub fn ProfileEditPage() -> Element {
                             let b = bio();
                             let av = avatar_url();
                             let loc = location();
+                            let lang = lang;
+                            let toasts = toasts.clone();
                             spawn(async move {
                                 match api::upsert_profile(
                                     token,
@@ -55,7 +59,13 @@ pub fn ProfileEditPage() -> Element {
                                 )
                                 .await {
                                     Ok(_) => status.set("Saved.".to_string()),
-                                    Err(e) => status.set(format!("Error: {e}")),
+                                    Err(e) => toasts.error(
+                                        crate::t(lang, "toast.profile_save_title"),
+                                        Some(format!(
+                                            "{} {e}",
+                                            crate::t(lang, "toast.details")
+                                        )),
+                                    ),
                                 }
                             });
                         },
@@ -75,6 +85,8 @@ pub fn ProfileEditPage() -> Element {
 pub fn ActivityFeed() -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
+    let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
 
     let feed = use_resource(move || {
         let token = token.clone();
@@ -85,6 +97,20 @@ pub fn ActivityFeed() -> Element {
             api::list_my_activity(token, 50).await
         }
     });
+    let mut load_error = use_signal(|| None::<String>);
+
+    use_effect(move || {
+        let err = feed().and_then(|res| res.err()).map(|e| e.to_string());
+        if err.as_ref() != load_error().as_ref() {
+            if let Some(message) = &err {
+                toasts.error(
+                    crate::t(lang, "toast.load_activity_title"),
+                    Some(format!("{} {message}", crate::t(lang, "toast.details"))),
+                );
+            }
+            load_error.set(err);
+        }
+    });
 
     rsx! {
         document::Link { rel: "stylesheet", href: FEED_CSS }
@@ -92,7 +118,7 @@ pub fn ActivityFeed() -> Element {
             h2 { "Your activity" }
             match feed() {
                 None => rsx! { p { "Loading…" } },
-                Some(Err(e)) => rsx! { p { class: "error", "Error: {e}" } },
+                Some(Err(_)) => rsx! { p { class: "hint", {crate::t(lang, "common.error_try_again")} } },
                 Some(Ok(items)) => rsx! {
                     if items.is_empty() {
                         p { class: "hint", "No activity yet." }

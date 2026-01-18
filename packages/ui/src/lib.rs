@@ -39,5 +39,8 @@ pub use theme::CivicTheme;
 mod account_menu;
 pub use account_menu::AccountMenu;
 
+mod toast;
+pub use toast::{use_toasts, ToastProvider};
+
 mod i18n;
 pub use i18n::{set_lang, t, use_lang, I18nProvider, Lang};

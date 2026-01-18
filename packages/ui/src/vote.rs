@@ -10,10 +10,10 @@ pub fn VoteWidget(
 ) -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
 
     let mut score = use_signal(move || initial_score);
     let mut my_vote = use_signal(|| None::<i16>);
-    let mut err = use_signal(String::new);
     let target_id_initial = target_id.clone();
     let mut target_key = use_signal(move || target_id_initial.clone());
     let target_id_value = target_id.clone();
@@ -25,9 +25,9 @@ pub fn VoteWidget(
         target_key.set(target_id_value.clone());
         score.set(initial_score);
         my_vote.set(None);
-        err.set(String::new());
     }
 
+    let toasts_for_effect = toasts.clone();
     use_effect(move || {
         let token = id_token();
         let tid = target_key();
@@ -39,7 +39,10 @@ pub fn VoteWidget(
                         score.set(state.score);
                         my_vote.set(state.my_vote);
                     }
-                    Err(e) => err.set(format!("{e}")),
+                    Err(e) => toasts_for_effect.error(
+                        crate::t(lang, "toast.vote_save_title"),
+                        Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                    ),
                 }
             } else {
                 score.set(initial_score);
@@ -47,6 +50,13 @@ pub fn VoteWidget(
             }
         });
     });
+
+    let toasts_up = toasts.clone();
+    let toasts_down = toasts.clone();
+    let toasts_clear = toasts.clone();
+    let toasts_required_up = toasts.clone();
+    let toasts_required_down = toasts.clone();
+    let toasts_required_clear = toasts;
 
     rsx! {
         div { class: "vote_widget",
@@ -56,10 +66,12 @@ pub fn VoteWidget(
                     onclick: move |_| {
                         let token = id_token().unwrap_or_default();
                         if token.trim().is_empty() {
-                            err.set(crate::t(lang, "common.signin_to_vote"));
+                            toasts_required_up.error(
+                                crate::t(lang, "toast.vote_required_title"),
+                                Some(crate::t(lang, "common.signin_to_vote")),
+                            );
                             return;
                         }
-                        err.set(String::new());
 
                         // optimistic toggle
                         let current = my_vote();
@@ -81,7 +93,10 @@ pub fn VoteWidget(
                                     score.set(state.score);
                                     my_vote.set(state.my_vote);
                                 }
-                                Err(e) => err.set(format!("{e}")),
+                                Err(e) => toasts_up.error(
+                                    crate::t(lang, "toast.vote_save_title"),
+                                    Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                                ),
                             }
                         });
                     },
@@ -93,10 +108,12 @@ pub fn VoteWidget(
                     onclick: move |_| {
                         let token = id_token().unwrap_or_default();
                         if token.trim().is_empty() {
-                            err.set(crate::t(lang, "common.signin_to_vote"));
+                            toasts_required_down.error(
+                                crate::t(lang, "toast.vote_required_title"),
+                                Some(crate::t(lang, "common.signin_to_vote")),
+                            );
                             return;
                         }
-                        err.set(String::new());
 
                         // optimistic toggle
                         let current = my_vote();
@@ -118,7 +135,10 @@ pub fn VoteWidget(
                                     score.set(state.score);
                                     my_vote.set(state.my_vote);
                                 }
-                                Err(e) => err.set(format!("{e}")),
+                                Err(e) => toasts_down.error(
+                                    crate::t(lang, "toast.vote_save_title"),
+                                    Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                                ),
                             }
                         });
                     },
@@ -129,10 +149,12 @@ pub fn VoteWidget(
                     onclick: move |_| {
                         let token = id_token().unwrap_or_default();
                         if token.trim().is_empty() {
-                            err.set(crate::t(lang, "common.signin_to_vote"));
+                            toasts_required_clear.error(
+                                crate::t(lang, "toast.vote_required_title"),
+                                Some(crate::t(lang, "common.signin_to_vote")),
+                            );
                             return;
                         }
-                        err.set(String::new());
                         // optimistic clear
                         let current = my_vote();
                         let mut next_score = score();
@@ -149,7 +171,10 @@ pub fn VoteWidget(
                                     score.set(state.score);
                                     my_vote.set(state.my_vote);
                                 }
-                                Err(e) => err.set(format!("{e}")),
+                                Err(e) => toasts_clear.error(
+                                    crate::t(lang, "toast.vote_save_title"),
+                                    Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                                ),
                             }
                         });
                     },
@@ -158,9 +183,6 @@ pub fn VoteWidget(
             }
             if let Some(v) = my_vote() {
                 p { class: "hint", {format!("{} {v}", crate::t(lang, "vote.your_vote"))} }
-            }
-            if !err().is_empty() {
-                p { class: "error", "{err}" }
             }
         }
     }

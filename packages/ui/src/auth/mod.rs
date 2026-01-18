@@ -72,17 +72,16 @@ pub fn AuthGate(children: Element) -> Element {
 pub fn SignIn() -> Element {
     let mut email = use_signal(String::new);
     let mut password = use_signal(String::new);
-    let mut error = use_signal(|| None::<String>);
     let mut id_token = use_context::<Signal<Option<String>>>();
     let navigator = use_navigator();
     let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
 
     let on_submit = move |evt: Event<FormData>| {
         evt.prevent_default();
         let navigator = navigator;
+        let toasts = toasts.clone();
         spawn(async move {
-            error.set(None);
-
             match api::signin(email(), password()).await {
                 Ok(token) => {
                     // Store in localStorage
@@ -102,7 +101,10 @@ pub fn SignIn() -> Element {
                     navigator.push("/me");
                 }
                 Err(e) => {
-                    error.set(Some(e.to_string()));
+                    toasts.error(
+                        crate::t(lang, "toast.signin_failed_title"),
+                        Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                    );
                 }
             }
         });
@@ -116,10 +118,6 @@ pub fn SignIn() -> Element {
             p { {crate::t(lang, "auth.signin.body")} }
 
             form { onsubmit: on_submit,
-                if let Some(err) = error() {
-                    p { class: "error", {err} }
-                }
-
                 div { class: "form-group",
                     label { r#for: "email", {crate::t(lang, "auth.signin.email")} }
                     input {
@@ -174,25 +172,28 @@ pub fn SignUpForm() -> Element {
     let mut email = use_signal(String::new);
     let mut password = use_signal(String::new);
     let mut confirm_password = use_signal(String::new);
-    let mut error = use_signal(|| None::<String>);
     let mut success = use_signal(|| false);
     let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
 
     let on_submit = move |evt: Event<FormData>| {
         evt.prevent_default();
+        let toasts = toasts.clone();
         spawn(async move {
-            error.set(None);
-
             // Validate
             if !email().contains('@') {
-                error.set(Some(crate::t(lang, "auth.error.invalid_email").to_string()));
+                toasts.error(
+                    crate::t(lang, "toast.signup_failed_title"),
+                    Some(crate::t(lang, "auth.error.invalid_email")),
+                );
                 return;
             }
 
             if password() != confirm_password() {
-                error.set(Some(
-                    crate::t(lang, "auth.error.passwords_dont_match").to_string(),
-                ));
+                toasts.error(
+                    crate::t(lang, "toast.signup_failed_title"),
+                    Some(crate::t(lang, "auth.error.passwords_dont_match")),
+                );
                 return;
             }
 
@@ -202,7 +203,10 @@ pub fn SignUpForm() -> Element {
                     success.set(true);
                 }
                 Err(e) => {
-                    error.set(Some(e.to_string()));
+                    toasts.error(
+                        crate::t(lang, "toast.signup_failed_title"),
+                        Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                    );
                 }
             }
         });
@@ -222,10 +226,6 @@ pub fn SignUpForm() -> Element {
                 }
             } else {
                 form { onsubmit: on_submit,
-                    if let Some(err) = error() {
-                        p { class: "error", {err} }
-                    }
-
                     div { class: "form-group",
                         label { r#for: "email", {crate::t(lang, "auth.signup.email")} }
                         input {
@@ -284,14 +284,20 @@ pub fn VerifyEmailPage(token: Option<String>) -> Element {
     let mut status = use_signal(|| "loading".to_string());
     let mut error_msg = use_signal(String::new);
     let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
     let token = token.unwrap_or_default();
 
     use_effect(move || {
         let token = token.clone();
+        let toasts = toasts.clone();
         spawn(async move {
             if token.is_empty() {
                 status.set("error".to_string());
                 error_msg.set("No verification token provided".to_string());
+                toasts.error(
+                    crate::t(lang, "toast.verify_failed_title"),
+                    Some(crate::t(lang, "toast.try_again")),
+                );
                 return;
             }
 
@@ -303,6 +309,10 @@ pub fn VerifyEmailPage(token: Option<String>) -> Element {
                 Err(e) => {
                     status.set("error".to_string());
                     error_msg.set(e.to_string());
+                    toasts.error(
+                        crate::t(lang, "toast.verify_failed_title"),
+                        Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                    );
                 }
             }
         });
@@ -394,10 +404,10 @@ pub fn RequestPasswordResetForm() -> Element {
 pub fn ResetPasswordConfirmForm() -> Element {
     let mut password = use_signal(String::new);
     let mut confirm_password = use_signal(String::new);
-    let mut error = use_signal(|| None::<String>);
     let mut success = use_signal(|| false);
     let mut token = use_signal(String::new);
     let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
 
     // Extract token from URL
     use_effect(move || {
@@ -423,13 +433,13 @@ pub fn ResetPasswordConfirmForm() -> Element {
 
     let on_submit = move |evt: Event<FormData>| {
         evt.prevent_default();
+        let toasts = toasts.clone();
         spawn(async move {
-            error.set(None);
-
             if password() != confirm_password() {
-                error.set(Some(
-                    crate::t(lang, "auth.error.passwords_dont_match").to_string(),
-                ));
+                toasts.error(
+                    crate::t(lang, "toast.reset_failed_title"),
+                    Some(crate::t(lang, "auth.error.passwords_dont_match")),
+                );
                 return;
             }
 
@@ -438,7 +448,10 @@ pub fn ResetPasswordConfirmForm() -> Element {
                     success.set(true);
                 }
                 Err(e) => {
-                    error.set(Some(e.to_string()));
+                    toasts.error(
+                        crate::t(lang, "toast.reset_failed_title"),
+                        Some(format!("{} {e}", crate::t(lang, "toast.details"))),
+                    );
                 }
             }
         });
@@ -459,10 +472,6 @@ pub fn ResetPasswordConfirmForm() -> Element {
                 }
             } else {
                 form { onsubmit: on_submit,
-                    if let Some(err) = error() {
-                        p { class: "error", {err} }
-                    }
-
                     div { class: "form-group",
                         label { r#for: "password", {crate::t(lang, "auth.reset_confirm.password")} }
                         input {
@@ -572,6 +581,7 @@ pub fn MePage() -> Element {
     let mut id_token = use_context::<Signal<Option<String>>>();
     let auth_ready = try_use_context::<Signal<bool>>();
     let lang = crate::use_lang()();
+    let toasts = crate::use_toasts();
 
     use_effect(move || {
         if id_token().is_some() {
@@ -610,6 +620,20 @@ pub fn MePage() -> Element {
             api::auth_me(token).await
         }
     });
+    let mut load_error = use_signal(|| None::<String>);
+
+    use_effect(move || {
+        let err = me().and_then(|res| res.err()).map(|e| e.to_string());
+        if err.as_ref() != load_error().as_ref() {
+            if let Some(message) = &err {
+                toasts.error(
+                    crate::t(lang, "toast.me_load_title"),
+                    Some(format!("{} {message}", crate::t(lang, "toast.details"))),
+                );
+            }
+            load_error.set(err);
+        }
+    });
 
     rsx! {
         document::Link { rel: "stylesheet", href: AUTH_CSS }
@@ -628,9 +652,7 @@ pub fn MePage() -> Element {
                     None => rsx! {
                         p { {crate::t(lang, "common.loading")} }
                     },
-                    Some(Err(err)) => rsx! {
-                        p { class: "error", {format!("{} {err}", crate::t(lang, "auth.auth_error_prefix"))} }
-                    },
+                    Some(Err(_)) => rsx! { p { class: "hint", {crate::t(lang, "common.error_try_again")} } },
                     Some(Ok(me)) => rsx! {
                         p {
                             {crate::t(lang, "me.user_id")}
