@@ -64,13 +64,13 @@ pub async fn set_vote(
                 "#
             };
             sqlx::query(sql)
-            .bind(crate::db::uuid_to_db(user_id))
-            .bind(target_type.as_db())
-            .bind(crate::db::uuid_to_db(tid))
-            .bind(value)
-            .execute(pool)
-            .await
-            .map_err(|e| ServerFnError::new(e.to_string()))?;
+                .bind(crate::db::uuid_to_db(user_id))
+                .bind(target_type.as_db())
+                .bind(crate::db::uuid_to_db(tid))
+                .bind(value)
+                .execute(pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
 
             // Activity log (best-effort)
             let action = if value == 1 { "voted_up" } else { "voted_down" };

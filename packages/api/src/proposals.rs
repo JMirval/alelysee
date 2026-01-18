@@ -21,7 +21,11 @@ pub async fn create_proposal(
     {
         use sqlx::Row;
 
-        info!("proposals.create_proposal: title_len={} tags_len={}", title.len(), tags_csv.len());
+        info!(
+            "proposals.create_proposal: title_len={} tags_len={}",
+            title.len(),
+            tags_csv.len()
+        );
         let author_user_id = crate::auth::require_user_id(id_token).await?;
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;

@@ -84,8 +84,7 @@ async fn vote_state_roundtrip() {
     assert_eq!(state.score, 0);
     assert_eq!(state.my_vote, None);
 
-    let state =
-        api::get_vote_state(token, ContentTargetType::Proposal, proposal_id).await;
+    let state = api::get_vote_state(token, ContentTargetType::Proposal, proposal_id).await;
     let state = state.expect("Should fetch cleared vote state");
     assert_eq!(state.score, 0);
     assert_eq!(state.my_vote, None);

@@ -52,11 +52,11 @@ pub async fn list_my_activity(
             title_expr
         );
         let rows = sqlx::query(&sql)
-        .bind(crate::db::uuid_to_db(user_id))
-        .bind(limit)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .bind(crate::db::uuid_to_db(user_id))
+            .bind(limit)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let mut items = Vec::with_capacity(rows.len());
         for row in rows {
