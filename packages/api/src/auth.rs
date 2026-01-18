@@ -460,13 +460,13 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         };
 
         sqlx::query(insert_user_sql)
-        .bind(user_id.to_string())
-        .bind(&email)
-        .bind(&password_hash)
-        .bind(&auth_subject)
-        .execute(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .bind(user_id.to_string())
+            .bind(&email)
+            .bind(&password_hash)
+            .bind(&auth_subject)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
         tracing::info!("auth.signup: user created user_id={}", user_id);
 
         // Generate verification token
@@ -487,12 +487,12 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         };
 
         sqlx::query(insert_verification_sql)
-        .bind(user_id.to_string())
-        .bind(&token_hash)
-        .bind(&expires_at_str)
-        .execute(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .bind(user_id.to_string())
+            .bind(&token_hash)
+            .bind(&expires_at_str)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // Send verification email using the email service from state
         crate::email::send_verification_email(state.email.as_ref(), &email, &token)
