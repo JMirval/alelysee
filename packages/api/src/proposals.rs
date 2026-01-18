@@ -1,5 +1,7 @@
 use crate::types::Proposal;
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use tracing::{debug, info};
 
 #[dioxus::prelude::post("/api/proposals/create")]
 pub async fn create_proposal(
@@ -19,6 +21,7 @@ pub async fn create_proposal(
     {
         use sqlx::Row;
 
+        info!("proposals.create_proposal: title_len={} tags_len={}", title.len(), tags_csv.len());
         let author_user_id = crate::auth::require_user_id(id_token).await?;
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
@@ -73,6 +76,7 @@ pub async fn create_proposal(
 
         // activity: created proposal
         let proposal_id: String = row.get("id");
+        info!("proposals.create_proposal: proposal_id={}", proposal_id);
         sqlx::query(
             "insert into activity (user_id, action, target_type, target_id) values ($1, 'created', 'proposal', $2)",
         )
@@ -101,7 +105,7 @@ pub async fn create_proposal(
     }
 }
 
-#[dioxus::prelude::get("/api/proposals/list")]
+#[dioxus::prelude::post("/api/proposals/list")]
 pub async fn list_proposals(limit: i64) -> Result<Vec<Proposal>, ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
@@ -113,6 +117,7 @@ pub async fn list_proposals(limit: i64) -> Result<Vec<Proposal>, ServerFnError> 
     {
         use sqlx::Row;
 
+        debug!("proposals.list_proposals: limit={}", limit);
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
         let sql = if crate::db::is_sqlite() {
@@ -180,6 +185,7 @@ pub async fn list_proposals(limit: i64) -> Result<Vec<Proposal>, ServerFnError> 
             });
         }
 
+        debug!("proposals.list_proposals: count={}", proposals.len());
         Ok(proposals)
     }
 }
@@ -197,6 +203,7 @@ pub async fn get_proposal(id: String) -> Result<Proposal, ServerFnError> {
         use sqlx::Row;
         use uuid::Uuid;
 
+        debug!("proposals.get_proposal: id={}", id);
         let pid = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
@@ -284,6 +291,7 @@ pub async fn update_proposal(
         use sqlx::Row;
         use uuid::Uuid;
 
+        info!("proposals.update_proposal: id={}", id);
         let user_id = crate::auth::require_user_id(id_token).await?;
         let pid = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
         let state = crate::state::AppState::global();
@@ -298,6 +306,7 @@ pub async fn update_proposal(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
         let owner = crate::db::uuid_from_db(&owner)?;
         if owner != user_id {
+            info!("proposals.update_proposal: forbidden user_id={}", user_id);
             return Err(ServerFnError::new("not allowed"));
         }
 

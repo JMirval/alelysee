@@ -1,5 +1,7 @@
 use crate::types::{ContentTargetType, VoteState};
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use tracing::{debug, info};
 
 /// Set a vote on any content.
 ///
@@ -23,6 +25,10 @@ pub async fn set_vote(
     {
         use uuid::Uuid;
 
+        debug!(
+            "votes.set_vote: target_type={:?} target_id={} value={}",
+            target_type, target_id, value
+        );
         let user_id = crate::auth::require_user_id(id_token).await?;
         let tid =
             Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
@@ -30,6 +36,7 @@ pub async fn set_vote(
         let pool = state.db.pool().await;
 
         if value == 0 {
+            info!("votes.set_vote: clear user_id={}", user_id);
             sqlx::query(
                 "delete from votes where user_id = $1 and target_type = $2 and target_id = $3",
             )
@@ -40,6 +47,7 @@ pub async fn set_vote(
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
         } else if value == 1 || value == -1 {
+            info!("votes.set_vote: set user_id={} value={}", user_id, value);
             sqlx::query(
                 r#"
                 insert into votes (user_id, target_type, target_id, value)
@@ -90,6 +98,7 @@ pub async fn set_vote(
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        debug!("votes.set_vote: score={} my_vote={:?}", score, my_vote);
         Ok(VoteState {
             target_type,
             target_id: tid,

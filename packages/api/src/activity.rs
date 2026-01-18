@@ -1,7 +1,9 @@
 use crate::types::ActivityItem;
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use tracing::debug;
 
-#[dioxus::prelude::get("/api/activity/me")]
+#[dioxus::prelude::post("/api/activity/me")]
 pub async fn list_my_activity(
     id_token: String,
     limit: i64,
@@ -16,11 +18,17 @@ pub async fn list_my_activity(
     {
         use crate::types::{ActivityAction, ContentTargetType};
         use sqlx::Row;
+        debug!("activity.list_my_activity: limit={}", limit);
         let user_id = crate::auth::require_user_id(id_token).await?;
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
 
-        let rows = sqlx::query(
+        let title_expr = if crate::db::is_sqlite() {
+            "substr(body_markdown, 1, 80)"
+        } else {
+            "left(body_markdown, 80)"
+        };
+        let sql = format!(
             r#"
             select
                 CAST(a.id as TEXT) as id,
@@ -32,7 +40,7 @@ pub async fn list_my_activity(
                 case
                     when a.target_type = 'proposal' then (select title from proposals where id = a.target_id)
                     when a.target_type = 'program' then (select title from programs where id = a.target_id)
-                    when a.target_type = 'comment' then (select left(body_markdown, 80) from comments where id = a.target_id)
+                    when a.target_type = 'comment' then (select {} from comments where id = a.target_id)
                     when a.target_type = 'video' then (select storage_key from videos where id = a.target_id)
                     else null
                 end as title
@@ -41,7 +49,9 @@ pub async fn list_my_activity(
             order by a.created_at desc
             limit $2
             "#,
-        )
+            title_expr
+        );
+        let rows = sqlx::query(&sql)
         .bind(crate::db::uuid_to_db(user_id))
         .bind(limit)
         .fetch_all(pool)
@@ -77,6 +87,7 @@ pub async fn list_my_activity(
             });
         }
 
+        debug!("activity.list_my_activity: count={}", items.len());
         Ok(items)
     }
 }

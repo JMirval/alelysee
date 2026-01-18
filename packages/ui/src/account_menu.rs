@@ -9,7 +9,8 @@ const JS_SIGN_OUT_CLEAR: &str = r#"(function(){ try { localStorage.removeItem("a
 #[component]
 pub fn AccountMenu() -> Element {
     let mut id_token = use_context::<Signal<Option<String>>>();
-    let token = id_token().unwrap_or_default();
+    let auth_ready = try_use_context::<Signal<bool>>();
+    let navigator = use_navigator();
 
     let lang_sig = crate::use_lang();
     let lang = lang_sig();
@@ -17,7 +18,7 @@ pub fn AccountMenu() -> Element {
     let mut open = use_signal(|| false);
 
     let me = use_resource(move || {
-        let token = token.clone();
+        let token = id_token().unwrap_or_default();
         async move {
             if token.trim().is_empty() {
                 return Ok(None);
@@ -37,8 +38,18 @@ pub fn AccountMenu() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: THEME_CSS }
 
-        if id_token().is_none() {
-            a { class: "btn primary", href: "/auth/signin", {crate::t(lang, "nav.signin")} }
+        if auth_ready.as_ref().is_some_and(|ready| !ready()) {
+            span { class: "btn primary", {crate::t(lang, "common.loading")} }
+        } else if id_token().is_none() {
+            a {
+                class: "btn primary",
+                href: "/auth/signin",
+                onclick: move |evt| {
+                    evt.prevent_default();
+                    navigator.push("/auth/signin");
+                },
+                {crate::t(lang, "nav.signin")}
+            }
         } else {
             div { class: "account_menu",
                 button {
@@ -69,8 +80,26 @@ pub fn AccountMenu() -> Element {
 
                 if open() {
                     div { class: "dropdown",
-                        a { class: "dropdown_item", href: "/me", onclick: move |_| open.set(false), {crate::t(lang, "nav.profile")} }
-                        a { class: "dropdown_item", href: "/me/edit", onclick: move |_| open.set(false), {crate::t(lang, "nav.edit_profile")} }
+                        a {
+                            class: "dropdown_item",
+                            href: "/me",
+                            onclick: move |evt| {
+                                evt.prevent_default();
+                                open.set(false);
+                                navigator.push("/me");
+                            },
+                            {crate::t(lang, "nav.profile")}
+                        }
+                        a {
+                            class: "dropdown_item",
+                            href: "/me/edit",
+                            onclick: move |evt| {
+                                evt.prevent_default();
+                                open.set(false);
+                                navigator.push("/me/edit");
+                            },
+                            {crate::t(lang, "nav.edit_profile")}
+                        }
                         div { class: "dropdown_item",
                             span { class: "hint", {crate::t(lang, "lang.label")} }
                             div { style: "margin-left:auto; display:flex; gap:6px;",

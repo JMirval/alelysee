@@ -62,6 +62,8 @@ dependencies = [
  "aws-sdk-s3",
  "chrono",
  "dioxus",
+ "dioxus-fullstack",
+ "dioxus-server",
  "dotenvy",
  "hex",
  "jsonwebtoken",
@@ -6936,6 +6938,7 @@ dependencies = [
  "api",
  "dioxus",
  "urlencoding",
+ "web-sys",
 ]
 
 [[package]]

@@ -11,6 +11,8 @@ members = [
 
 [workspace.dependencies]
 dioxus = { version = "0.7.3" }
+dioxus-fullstack = { version = "0.7.3" }
+dioxus-server = { version = "0.7.3" }
 
 # workspace
 ui = { path = "packages/ui" }

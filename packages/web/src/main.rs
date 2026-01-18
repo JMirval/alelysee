@@ -21,8 +21,8 @@ enum Route {
     AuthSignIn {},
     #[route("/auth/signup")]
     AuthSignUp {},
-    #[route("/auth/verify")]
-    AuthVerify {},
+    #[route("/auth/verify?:token")]
+    AuthVerify { token: Option<String> },
     #[route("/auth/reset-password")]
     AuthResetPassword {},
     #[route("/auth/reset-password/confirm")]
@@ -194,6 +194,8 @@ fn App() -> Element {
     // Build cool things ✌️
     let id_token = use_signal(|| None::<String>);
     use_context_provider(|| id_token);
+    let auth_ready = use_signal(|| false);
+    use_context_provider(|| auth_ready);
 
     rsx! {
         // Global app resources

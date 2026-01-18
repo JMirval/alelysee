@@ -1,5 +1,7 @@
 use crate::types::{Program, Proposal};
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use tracing::{debug, info};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ProgramDetail {
@@ -24,6 +26,7 @@ pub async fn create_program(
     {
         use sqlx::Row;
 
+        info!("programs.create_program: title_len={}", title.len());
         let author_user_id = crate::auth::require_user_id(id_token).await?;
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
@@ -51,6 +54,7 @@ pub async fn create_program(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let program_id: String = row.get("id");
+        info!("programs.create_program: program_id={}", program_id);
         sqlx::query(
             "insert into activity (user_id, action, target_type, target_id) values ($1, 'created', 'program', $2)",
         )
@@ -94,6 +98,10 @@ pub async fn add_program_item(
     #[cfg(feature = "server")]
     {
         use uuid::Uuid;
+        debug!(
+            "programs.add_program_item: program_id={} proposal_id={} position={}",
+            program_id, proposal_id, position
+        );
         let user_id = crate::auth::require_user_id(id_token).await?;
         let pid =
             Uuid::parse_str(&program_id).map_err(|_| ServerFnError::new("invalid program_id"))?;
@@ -113,6 +121,7 @@ pub async fn add_program_item(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
         let owner = crate::db::uuid_from_db(&owner)?;
         if owner != user_id {
+            info!("programs.add_program_item: forbidden user_id={}", user_id);
             return Err(ServerFnError::new("not allowed"));
         }
 
@@ -126,11 +135,15 @@ pub async fn add_program_item(
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        info!(
+            "programs.add_program_item: ok program_id={} proposal_id={}",
+            program_id, proposal_id
+        );
         Ok(())
     }
 }
 
-#[dioxus::prelude::get("/api/programs/list")]
+#[dioxus::prelude::post("/api/programs/list")]
 pub async fn list_programs(limit: i64) -> Result<Vec<Program>, ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
@@ -141,6 +154,7 @@ pub async fn list_programs(limit: i64) -> Result<Vec<Program>, ServerFnError> {
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
+        debug!("programs.list_programs: limit={}", limit);
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
         let rows = sqlx::query(
@@ -185,6 +199,7 @@ pub async fn list_programs(limit: i64) -> Result<Vec<Program>, ServerFnError> {
             });
         }
 
+        debug!("programs.list_programs: count={}", programs.len());
         Ok(programs)
     }
 }
@@ -202,6 +217,7 @@ pub async fn get_program(id: String) -> Result<ProgramDetail, ServerFnError> {
         use sqlx::Row;
         use uuid::Uuid;
 
+        debug!("programs.get_program: id={}", id);
         let program_id = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
@@ -312,6 +328,11 @@ pub async fn get_program(id: String) -> Result<ProgramDetail, ServerFnError> {
             });
         }
 
+        debug!(
+            "programs.get_program: program_id={} proposals={}",
+            program_id,
+            proposals.len()
+        );
         Ok(ProgramDetail { program, proposals })
     }
 }
@@ -335,6 +356,7 @@ pub async fn update_program(
         use sqlx::Row;
         use uuid::Uuid;
 
+        info!("programs.update_program: id={}", id);
         let user_id = crate::auth::require_user_id(id_token).await?;
         let program_id = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
         let state = crate::state::AppState::global();
@@ -349,6 +371,7 @@ pub async fn update_program(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
         let owner = crate::db::uuid_from_db(&owner)?;
         if owner != user_id {
+            info!("programs.update_program: forbidden user_id={}", user_id);
             return Err(ServerFnError::new("not allowed"));
         }
 

@@ -11,12 +11,19 @@ const FEED_CSS: Asset = asset!("/assets/styling/feed.css");
 #[component]
 pub fn AuthBootstrap() -> Element {
     let mut id_token = use_context::<Signal<Option<String>>>();
+    let mut auth_ready = use_context::<Signal<bool>>();
 
     // Best-effort: try to load from localStorage (web + webviews). If it fails, do nothing.
     // This runs after mount to avoid SSR/hydration mismatches.
     use_effect(move || {
         spawn(async move {
-            // Dioxus 0.7: `eval` is available cross-platform (web/desktop/mobile) via WebView JS.
+            if let Some(saved) = read_id_token_from_storage() {
+                id_token.set(Some(saved));
+                auth_ready.set(true);
+                return;
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
             if let Ok(v) = document::eval(
                 r#"(function(){
                     try { return localStorage.getItem("alelysee_id_token") || ""; }
@@ -31,6 +38,7 @@ pub fn AuthBootstrap() -> Element {
                     }
                 }
             }
+            auth_ready.set(true);
         });
     });
 
@@ -66,10 +74,12 @@ pub fn SignIn() -> Element {
     let mut password = use_signal(String::new);
     let mut error = use_signal(|| None::<String>);
     let mut id_token = use_context::<Signal<Option<String>>>();
+    let navigator = use_navigator();
     let lang = crate::use_lang()();
 
     let on_submit = move |evt: Event<FormData>| {
         evt.prevent_default();
+        let navigator = navigator;
         spawn(async move {
             error.set(None);
 
@@ -88,8 +98,8 @@ pub fn SignIn() -> Element {
                     // Update context
                     id_token.set(Some(token));
 
-                    // Navigate to /me
-                    let _ = document::eval("window.location.assign('/me')").await;
+                    // Navigate to /me without full reload so in-memory auth stays intact.
+                    navigator.push("/me");
                 }
                 Err(e) => {
                     error.set(Some(e.to_string()));
@@ -264,31 +274,15 @@ pub fn SignUpForm() -> Element {
 }
 
 #[component]
-pub fn VerifyEmailPage() -> Element {
+pub fn VerifyEmailPage(token: Option<String>) -> Element {
     let mut status = use_signal(|| "loading".to_string());
     let mut error_msg = use_signal(String::new);
     let lang = crate::use_lang()();
+    let token = token.unwrap_or_default();
 
-    // Extract token from URL
     use_effect(move || {
+        let token = token.clone();
         spawn(async move {
-            // Get token from query params
-            let query = document::eval("window.location.search").await;
-            let query = query
-                .ok()
-                .and_then(|v| v.as_str().map(|s| s.to_string()))
-                .unwrap_or_default();
-
-            // Parse token from ?token=xxx
-            let token = query
-                .strip_prefix("?token=")
-                .or_else(|| {
-                    query
-                        .split('&')
-                        .find_map(|pair| pair.strip_prefix("token="))
-                })
-                .unwrap_or("");
-
             if token.is_empty() {
                 status.set("error".to_string());
                 error_msg.set("No verification token provided".to_string());
@@ -491,10 +485,12 @@ pub fn ResetPasswordConfirmForm() -> Element {
 #[component]
 pub fn AuthCallback() -> Element {
     let mut id_token = use_context::<Signal<Option<String>>>();
+    let navigator = use_navigator();
     let lang = crate::use_lang()();
 
     // Read location.hash and extract id_token.
     use_effect(move || {
+        let navigator = navigator;
         spawn(async move {
             let hash = document::eval("window.location.hash").await;
             let hash = hash
@@ -515,8 +511,8 @@ pub fn AuthCallback() -> Element {
 
                 id_token.set(Some(token));
 
-                // Navigate to /me
-                let _ = document::eval("window.location.assign('/me')").await;
+                // Navigate to /me without full reload so in-memory auth stays intact.
+                navigator.push("/me");
             }
         });
     });
@@ -557,12 +553,40 @@ pub fn SignOutButton() -> Element {
 
 #[component]
 pub fn MePage() -> Element {
-    let id_token = use_context::<Signal<Option<String>>>();
-    let token = id_token().unwrap_or_default();
+    let mut id_token = use_context::<Signal<Option<String>>>();
+    let auth_ready = try_use_context::<Signal<bool>>();
     let lang = crate::use_lang()();
 
+    use_effect(move || {
+        if id_token().is_some() {
+            return;
+        }
+        spawn(async move {
+            if let Some(saved) = read_id_token_from_storage() {
+                id_token.set(Some(saved));
+                return;
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Ok(v) = document::eval(
+                r#"(function(){
+                    try { return localStorage.getItem("alelysee_id_token") || ""; }
+                    catch(e) { return ""; }
+                })()"#,
+            )
+            .await
+            {
+                if let Some(saved) = v.as_str() {
+                    if !saved.trim().is_empty() {
+                        id_token.set(Some(saved.to_string()));
+                    }
+                }
+            }
+        });
+    });
+
     let me = use_resource(move || {
-        let token = token.clone();
+        let token = id_token().unwrap_or_default();
         async move {
             if token.trim().is_empty() {
                 return Err(ServerFnError::new("Not signed in"));
@@ -577,7 +601,9 @@ pub fn MePage() -> Element {
 
         div { class: "auth_gate",
             h2 { {crate::t(lang, "me.title")} }
-            if id_token().is_none() {
+            if auth_ready.as_ref().is_some_and(|ready| !ready()) {
+                p { {crate::t(lang, "common.loading")} }
+            } else if id_token().is_none() {
                 p { {crate::t(lang, "me.signed_out")} }
                 a { class: "btn primary", href: "/auth/signin", {crate::t(lang, "me.signin")} }
             } else {
@@ -633,6 +659,23 @@ pub(crate) fn extract_id_token_from_hash(hash: &str) -> Option<String> {
 pub(crate) fn js_escape(s: &str) -> String {
     // Minimal JS string escape for embedding into a double-quoted string.
     s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+#[cfg(target_arch = "wasm32")]
+fn read_id_token_from_storage() -> Option<String> {
+    let window = web_sys::window()?;
+    let storage = window.local_storage().ok()??;
+    let token = storage.get_item("alelysee_id_token").ok()??;
+    if token.trim().is_empty() {
+        None
+    } else {
+        Some(token)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn read_id_token_from_storage() -> Option<String> {
+    None
 }
 
 #[cfg(test)]

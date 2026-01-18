@@ -2,6 +2,15 @@ use anyhow::Result;
 use async_trait::async_trait;
 use rand::Rng;
 use sha2::{Digest, Sha256};
+use tracing::{debug, info};
+
+fn email_domain(email: &str) -> &str {
+    email.split('@').nth(1).unwrap_or("invalid")
+}
+
+fn email_label(email: &str) -> String {
+    format!("{} (len={})", email_domain(email), email.len())
+}
 
 /// Generate a cryptographically secure random token (64 hex chars from 32 bytes)
 pub fn generate_token() -> String {
@@ -34,6 +43,13 @@ pub struct SmtpEmailService;
 #[async_trait]
 impl EmailService for SmtpEmailService {
     async fn send_email(&self, to: &str, subject: &str, html: &str, text: &str) -> Result<()> {
+        debug!(
+            "email.smtp.send_email: to={} subject_len={} html_len={} text_len={}",
+            email_label(to),
+            subject.len(),
+            html.len(),
+            text.len()
+        );
         let smtp_host = std::env::var("SMTP_HOST")?;
         let smtp_port: u16 = std::env::var("SMTP_PORT")?.parse()?;
         let smtp_username = std::env::var("SMTP_USERNAME")?;
@@ -94,6 +110,11 @@ pub async fn send_verification_email(
     to: &str,
     token: &str,
 ) -> Result<()> {
+    info!(
+        "email.send_verification_email: to={} token_len={}",
+        email_label(to),
+        token.len()
+    );
     let base_url =
         std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let verify_url = format!("{}/auth/verify?token={}", base_url, token);
@@ -131,6 +152,11 @@ pub async fn send_password_reset_email(
     to: &str,
     token: &str,
 ) -> Result<()> {
+    info!(
+        "email.send_password_reset_email: to={} token_len={}",
+        email_label(to),
+        token.len()
+    );
     let base_url =
         std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
     let reset_url = format!("{}/auth/reset-password/confirm?token={}", base_url, token);

@@ -17,6 +17,7 @@ mod server {
     use serde::Deserialize;
     use sqlx::Row;
     use std::sync::OnceLock;
+    use tracing::{debug, info};
 
     #[derive(Debug, Deserialize)]
     #[allow(dead_code)]
@@ -35,6 +36,7 @@ mod server {
         }
 
         let url = std::env::var("AUTH_JWKS_URL").context("AUTH_JWKS_URL must be set")?;
+        debug!("auth.jwk_set: fetching jwks");
 
         let set: JwkSet = reqwest::Client::new()
             .get(url)
@@ -61,6 +63,7 @@ mod server {
 
         match header.alg {
             Algorithm::RS256 => {
+                debug!("auth.verify_id_token: alg=RS256");
                 // OAuth flow - existing verification
                 let kid = header.kid.ok_or_else(|| anyhow!("jwt missing kid"))?;
 
@@ -87,6 +90,7 @@ mod server {
                 Ok(token.claims.sub)
             }
             Algorithm::HS256 => {
+                debug!("auth.verify_id_token: alg=HS256");
                 // Local email/password flow - new verification
                 let user_id = verify_local_jwt(id_token)?;
                 Ok(user_id.to_string())
@@ -110,6 +114,7 @@ mod server {
         {
             let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
             let created_at = crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?;
+            debug!("auth.ensure_user_for_subject: existing user_id={}", id);
             return Ok(User { id, created_at });
         }
 
@@ -122,8 +127,10 @@ mod server {
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+        info!("auth.ensure_user_for_subject: created user_id={}", id);
         Ok(User {
-            id: crate::db::uuid_from_db(&row.get::<String, _>("id"))?,
+            id,
             created_at: crate::db::datetime_from_db(&row.get::<String, _>("created_at"))?,
         })
     }
@@ -149,8 +156,10 @@ mod server {
                 location: row.get("location"),
                 updated_at: crate::db::datetime_from_db(&row.get::<String, _>("updated_at"))?,
             };
+            debug!("auth.get_profile_for_user: hit user_id={}", user_id);
             Ok(Some(profile))
         } else {
+            debug!("auth.get_profile_for_user: miss user_id={}", user_id);
             Ok(None)
         }
     }
@@ -207,6 +216,7 @@ mod server {
             &EncodingKey::from_secret(secret.as_bytes()),
         )?;
 
+        debug!("auth.generate_local_jwt: user_id={}", user_id);
         Ok(token)
     }
 
@@ -222,7 +232,17 @@ mod server {
             &validation,
         )?;
 
-        Ok(Uuid::parse_str(&token_data.claims.sub)?)
+        let user_id = Uuid::parse_str(&token_data.claims.sub)?;
+        debug!("auth.verify_local_jwt: user_id={}", user_id);
+        Ok(user_id)
+    }
+
+    pub fn email_domain(email: &str) -> &str {
+        email.split('@').nth(1).unwrap_or("invalid")
+    }
+
+    pub fn email_label(email: &str) -> String {
+        format!("{} (len={})", email_domain(email), email.len())
     }
 
     #[cfg(test)]
@@ -307,6 +327,8 @@ pub struct Me {
 }
 
 pub async fn public_config() -> Result<PublicConfig, ServerFnError> {
+    #[cfg(feature = "server")]
+    tracing::debug!("auth.public_config");
     let auth_authorize_url = std::env::var("AUTH_AUTHORIZE_URL")
         .map_err(|_| ServerFnError::new("AUTH_AUTHORIZE_URL not set"))?;
     let auth_client_id = std::env::var("AUTH_CLIENT_ID")
@@ -332,6 +354,7 @@ pub async fn me_from_id_token(id_token: String) -> Result<Me, ServerFnError> {
 
     #[cfg(feature = "server")]
     {
+        tracing::debug!("auth.me_from_id_token: token_len={}", id_token.len());
         let sub = server::verify_id_token(&id_token)
             .await
             .map_err(|e| ServerFnError::new(format!("auth: {e:#}")))?;
@@ -362,15 +385,18 @@ pub async fn require_user_id(id_token: String) -> Result<Uuid, ServerFnError> {
 
     #[cfg(feature = "server")]
     {
+        tracing::debug!("auth.require_user_id: token_len={}", id_token.len());
         let sub = server::verify_id_token(&id_token)
             .await
             .map_err(|e| ServerFnError::new(format!("auth: {e:#}")))?;
         let user = server::ensure_user_for_subject(&sub).await?;
+        tracing::debug!("auth.require_user_id: user_id={}", user.id);
         Ok(user.id)
     }
 }
 
 /// Sign up a new user with email and password
+#[dioxus::prelude::post("/api/auth/signup")]
 pub async fn signup(email: String, password: String) -> Result<(), ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
@@ -382,6 +408,11 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
     {
         // Get AppState
         let state = crate::state::AppState::global();
+        tracing::info!(
+            "auth.request_password_reset: email={}",
+            server::email_label(&email)
+        );
+        tracing::info!("auth.signup: email={}", server::email_label(&email));
 
         // Validate email format (basic check)
         if !email.contains('@') || email.len() < 3 {
@@ -402,6 +433,7 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         if existing.is_some() {
+            tracing::info!("auth.signup: email already registered");
             return Err(ServerFnError::new("Email already registered"));
         }
 
@@ -431,6 +463,7 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         .execute(pool)
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
+        tracing::info!("auth.signup: user created user_id={}", user_id);
 
         // Generate verification token
         let token = crate::email::generate_token();
@@ -457,15 +490,17 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         crate::email::send_verification_email(state.email.as_ref(), &email, &token)
             .await
             .map_err(|e| {
-                eprintln!("Failed to send verification email: {}", e);
+                tracing::warn!("auth.signup: failed to send verification email: {}", e);
                 ServerFnError::new("Failed to send verification email")
             })?;
 
+        tracing::info!("auth.signup: verification email queued");
         Ok(())
     }
 }
 
 /// Verify email address with token
+#[dioxus::prelude::post("/api/auth/verify-email")]
 pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
@@ -475,6 +510,7 @@ pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
 
     #[cfg(feature = "server")]
     {
+        tracing::info!("auth.verify_email: token_len={}", token.len());
         let token_hash = crate::email::hash_token(&token);
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
@@ -496,6 +532,7 @@ pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
 
         // Check expiration
         if time::OffsetDateTime::now_utc() > expires_at {
+            tracing::info!("auth.verify_email: token expired");
             return Err(ServerFnError::new("Verification link has expired"));
         }
 
@@ -513,11 +550,13 @@ pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        tracing::info!("auth.verify_email: verified user_id={}", user_id);
         Ok(())
     }
 }
 
 /// Sign in with email and password
+#[dioxus::prelude::post("/api/auth/signin")]
 pub async fn signin(email: String, password: String) -> Result<String, ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
@@ -529,6 +568,7 @@ pub async fn signin(email: String, password: String) -> Result<String, ServerFnE
     {
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
+        tracing::info!("auth.signin: email={}", server::email_label(&email));
 
         // Look up user by email
         let user = sqlx::query(
@@ -570,6 +610,7 @@ pub async fn signin(email: String, password: String) -> Result<String, ServerFnE
 
         // Check email verified
         if !email_verified {
+            tracing::info!("auth.signin: email not verified");
             return Err(ServerFnError::new(
                 "Please verify your email before signing in",
             ));
@@ -579,11 +620,13 @@ pub async fn signin(email: String, password: String) -> Result<String, ServerFnE
         let token = server::generate_local_jwt(user_id)
             .map_err(|e| ServerFnError::new(format!("Failed to generate token: {}", e)))?;
 
+        tracing::info!("auth.signin: success user_id={}", user_id);
         Ok(token)
     }
 }
 
 /// Request password reset (always returns success for security)
+#[dioxus::prelude::post("/api/auth/request-password-reset")]
 pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
@@ -639,15 +682,24 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
                     .execute(pool)
                     .await
                     {
-                        eprintln!("Failed to store reset token: {}", e);
+                        tracing::warn!("auth.request_password_reset: store token failed: {}", e);
                     } else {
                         // Send reset email using the email service from state (log errors but don't reveal to user)
                         if let Err(e) = crate::email::send_password_reset_email(state.email.as_ref(), &email, &token).await {
-                            eprintln!("Failed to send password reset email: {}", e);
+                            tracing::warn!(
+                                "auth.request_password_reset: send email failed: {}",
+                                e
+                            );
                         }
                     }
                 }
             }
+            tracing::info!(
+                "auth.request_password_reset: dispatched user_id={}",
+                user_id_str
+            );
+        } else {
+            tracing::debug!("auth.request_password_reset: user not found");
         }
 
         // Always return success (security: don't reveal if email exists)
@@ -656,6 +708,7 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
 }
 
 /// Reset password with token
+#[dioxus::prelude::post("/api/auth/reset-password")]
 pub async fn reset_password(token: String, new_password: String) -> Result<(), ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
@@ -665,6 +718,7 @@ pub async fn reset_password(token: String, new_password: String) -> Result<(), S
 
     #[cfg(feature = "server")]
     {
+        tracing::info!("auth.reset_password: token_len={}", token.len());
         // Validate new password
         server::validate_password(&new_password).map_err(|e| ServerFnError::new(e.to_string()))?;
 
@@ -689,6 +743,7 @@ pub async fn reset_password(token: String, new_password: String) -> Result<(), S
 
         // Check expiration
         if time::OffsetDateTime::now_utc() > expires_at {
+            tracing::info!("auth.reset_password: token expired");
             return Err(ServerFnError::new("Reset link has expired"));
         }
 
@@ -718,6 +773,7 @@ pub async fn reset_password(token: String, new_password: String) -> Result<(), S
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        tracing::info!("auth.reset_password: success user_id={}", user_id);
         Ok(())
     }
 }

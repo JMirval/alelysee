@@ -1,5 +1,7 @@
 use crate::types::{ContentTargetType, UploadIntent, Video};
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use tracing::{debug, info};
 
 #[dioxus::prelude::post("/api/uploads/video_intent")]
 pub async fn create_video_upload_intent(
@@ -31,6 +33,10 @@ pub async fn create_video_upload_intent(
             return Err(ServerFnError::new("invalid file size"));
         }
 
+        info!(
+            "uploads.create_video_upload_intent: target_type={:?} target_id={} size={}",
+            target_type, target_id, byte_size
+        );
         // Ensure authenticated user exists (and we record ownership at finalize time).
         let _user_id = crate::auth::require_user_id(id_token).await?;
 
@@ -50,6 +56,7 @@ pub async fn create_video_upload_intent(
             target_id,
             Uuid::new_v4()
         );
+        debug!("uploads.create_video_upload_intent: storage_key={}", key);
 
         let creds = Credentials::new(access_key, secret_key, None, None, "railway");
         let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
@@ -77,6 +84,7 @@ pub async fn create_video_upload_intent(
             .await
             .map_err(|e| ServerFnError::new(format!("presign error: {e}")))?;
 
+        info!("uploads.create_video_upload_intent: presigned ok");
         Ok(UploadIntent {
             presigned_put_url: presigned.uri().to_string(),
             storage_key: key,
@@ -110,6 +118,10 @@ pub async fn finalize_video_upload(
         let tid =
             Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
 
+        info!(
+            "uploads.finalize_video_upload: target_type={:?} target_id={} storage_key={}",
+            target_type, target_id, storage_key
+        );
         let bucket = std::env::var("STORAGE_BUCKET")
             .map_err(|_| ServerFnError::new("STORAGE_BUCKET not set"))?;
         let endpoint = std::env::var("STORAGE_ENDPOINT")
@@ -171,6 +183,7 @@ pub async fn finalize_video_upload(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let vid = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+        info!("uploads.finalize_video_upload: video_id={}", vid);
         let _ = sqlx::query(
             "insert into activity (user_id, action, target_type, target_id) values ($1, 'created', 'video', $2)",
         )
@@ -198,7 +211,7 @@ pub async fn finalize_video_upload(
     }
 }
 
-#[dioxus::prelude::get("/api/videos/list")]
+#[dioxus::prelude::post("/api/videos/list")]
 pub async fn list_videos(
     target_type: ContentTargetType,
     target_id: String,
@@ -215,6 +228,10 @@ pub async fn list_videos(
         use sqlx::Row;
         use uuid::Uuid;
 
+        debug!(
+            "uploads.list_videos: target_type={:?} target_id={} limit={}",
+            target_type, target_id, limit
+        );
         let tid =
             Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
         let state = crate::state::AppState::global();
@@ -267,6 +284,7 @@ pub async fn list_videos(
             });
         }
 
+        debug!("uploads.list_videos: count={}", videos.len());
         Ok(videos)
     }
 }

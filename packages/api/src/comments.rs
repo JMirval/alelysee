@@ -1,5 +1,7 @@
 use crate::types::{Comment, ContentTargetType};
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use tracing::{debug, info};
 
 #[dioxus::prelude::post("/api/comments/create")]
 pub async fn create_comment(
@@ -26,6 +28,11 @@ pub async fn create_comment(
         use sqlx::Row;
         use uuid::Uuid;
 
+        info!(
+            "comments.create_comment: target_type={:?} body_len={}",
+            target_type,
+            body_markdown.len()
+        );
         let author_user_id = crate::auth::require_user_id(id_token).await?;
         let tid =
             Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
@@ -65,6 +72,7 @@ pub async fn create_comment(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let cid = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
+        info!("comments.create_comment: comment_id={}", cid);
 
         let _ = sqlx::query(
             "insert into activity (user_id, action, target_type, target_id) values ($1, 'commented', $2, $3)",
@@ -95,7 +103,7 @@ pub async fn create_comment(
     }
 }
 
-#[dioxus::prelude::get("/api/comments/list")]
+#[dioxus::prelude::post("/api/comments/list")]
 pub async fn list_comments(
     target_type: ContentTargetType,
     target_id: String,
@@ -112,6 +120,10 @@ pub async fn list_comments(
         use sqlx::Row;
         use uuid::Uuid;
 
+        debug!(
+            "comments.list_comments: target_type={:?} target_id={} limit={}",
+            target_type, target_id, limit
+        );
         let tid =
             Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
         let state = crate::state::AppState::global();
@@ -163,6 +175,7 @@ pub async fn list_comments(
             });
         }
 
+        debug!("comments.list_comments: count={}", comments.len());
         Ok(comments)
     }
 }

@@ -1,5 +1,7 @@
 use crate::types::Profile;
 use dioxus::prelude::*;
+#[cfg(feature = "server")]
+use tracing::info;
 
 #[dioxus::prelude::post("/api/profile/upsert")]
 pub async fn upsert_profile(
@@ -18,6 +20,11 @@ pub async fn upsert_profile(
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
+        info!(
+            "profile.upsert_profile: display_name_len={} bio_len={}",
+            display_name.len(),
+            bio.len()
+        );
         let user_id = crate::auth::require_user_id(id_token).await?;
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
@@ -51,6 +58,7 @@ pub async fn upsert_profile(
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
+        info!("profile.upsert_profile: user_id={}", user_id);
         Ok(Profile {
             user_id: crate::db::uuid_from_db(&row.get::<String, _>("user_id"))?,
             display_name: row.get("display_name"),

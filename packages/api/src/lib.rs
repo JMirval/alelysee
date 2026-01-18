@@ -34,9 +34,14 @@ mod types_tests;
 #[cfg(all(test, feature = "server"))]
 mod domain_tests;
 
+#[cfg(feature = "server")]
+pub mod test_utils;
+
 /// Health check endpoint
 #[get("/api/health")]
 pub async fn health_check() -> Result<String, ServerFnError> {
+    #[cfg(feature = "server")]
+    tracing::debug!("health_check");
     Ok("OK".to_string())
 }
 
@@ -44,6 +49,9 @@ pub async fn health_check() -> Result<String, ServerFnError> {
 #[get("/api/health/detailed")]
 pub async fn detailed_health_check() -> Result<serde_json::Value, ServerFnError> {
     use serde_json::json;
+
+    #[cfg(feature = "server")]
+    tracing::debug!("detailed_health_check");
 
     // Basic health response with timestamp and version info
     let health = json!({
@@ -63,6 +71,9 @@ pub async fn detailed_health_check() -> Result<serde_json::Value, ServerFnError>
 /// Metrics endpoint for monitoring
 #[get("/api/metrics")]
 pub async fn metrics_endpoint() -> Result<String, ServerFnError> {
+    #[cfg(feature = "server")]
+    tracing::debug!("metrics_endpoint");
+
     // Simple metrics in Prometheus format
     let metrics = r#"# HELP alelysee_requests_total Total number of requests
 # TYPE alelysee_requests_total counter
@@ -83,16 +94,22 @@ alelysee_uptime_seconds 0
 /// Echo the user input on the server.
 #[post("/api/echo")]
 pub async fn echo(input: String) -> Result<String, ServerFnError> {
+    #[cfg(feature = "server")]
+    tracing::debug!("echo: len={}", input.len());
     Ok(input)
 }
 
 #[get("/api/config")]
 pub async fn public_config() -> Result<auth::PublicConfig, ServerFnError> {
+    #[cfg(feature = "server")]
+    tracing::debug!("public_config");
     auth::public_config().await
 }
 
 #[post("/api/auth/me")]
 pub async fn auth_me(id_token: String) -> Result<auth::Me, ServerFnError> {
+    #[cfg(feature = "server")]
+    tracing::debug!("auth_me: token_len={}", id_token.len());
     auth::me_from_id_token(id_token).await
 }
 
@@ -105,6 +122,3 @@ pub use programs::{add_program_item, create_program, get_program, list_programs,
 pub use proposals::{create_proposal, get_proposal, list_proposals, update_proposal};
 pub use uploads::{create_video_upload_intent, finalize_video_upload, list_videos};
 pub use votes::set_vote;
-
-#[cfg(feature = "server")]
-pub mod test_utils;
