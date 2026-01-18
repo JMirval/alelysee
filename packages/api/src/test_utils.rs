@@ -22,10 +22,6 @@ pub struct TestContext {
 
 impl TestContext {
     pub async fn new() -> Self {
-        // Acquire the test mutex to serialize test execution
-        // This prevents multiple tests from calling AppState::set_global simultaneously
-        let guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
-
         // Install sqlx drivers for Any pool
         sqlx::any::install_default_drivers();
 
@@ -52,6 +48,11 @@ impl TestContext {
         // Get pool
         let pool = database.pool().await.clone();
 
+        // Acquire the test mutex to serialize test execution
+        // This prevents multiple tests from calling AppState::set_global simultaneously
+        // We acquire it after all async operations to avoid holding across await points
+        let guard = TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+
         // Create AppState
         let config = AppConfig {
             mode: AppMode::Local,
@@ -71,7 +72,7 @@ impl TestContext {
             db: Arc::new(database),
             email: Arc::new(ConsoleEmailService),
             storage: Arc::new(FilesystemStorageService::new(
-                &uploads_path.to_string_lossy(),
+                uploads_path.to_string_lossy().to_string(),
                 "http://localhost:8080/dev/uploads",
             )),
             config: config.clone(),

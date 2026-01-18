@@ -11,10 +11,10 @@ pub struct FilesystemStorageService {
 }
 
 impl FilesystemStorageService {
-    pub fn new(base_path: &str, serve_url: &str) -> Self {
+    pub fn new(base_path: impl Into<PathBuf>, serve_url: impl Into<String>) -> Self {
         Self {
-            base_path: PathBuf::from(base_path),
-            serve_url: serve_url.to_string(),
+            base_path: base_path.into(),
+            serve_url: serve_url.into(),
         }
     }
 }

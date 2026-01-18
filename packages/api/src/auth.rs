@@ -17,7 +17,6 @@ mod server {
     use serde::Deserialize;
     use sqlx::Row;
     use std::sync::OnceLock;
-    use time::OffsetDateTime;
 
     #[derive(Debug, Deserialize)]
     #[allow(dead_code)]
@@ -493,8 +492,7 @@ pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
             .ok_or_else(|| ServerFnError::new("Verification link is invalid or has expired"))?;
 
         let user_id = crate::db::uuid_from_db(&verification.get::<String, _>("user_id"))?;
-        let expires_at =
-            crate::db::datetime_from_db(&verification.get::<String, _>("expires_at"))?;
+        let expires_at = crate::db::datetime_from_db(&verification.get::<String, _>("expires_at"))?;
 
         // Check expiration
         if time::OffsetDateTime::now_utc() > expires_at {

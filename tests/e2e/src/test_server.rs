@@ -18,8 +18,8 @@ impl TestServer {
         let db_path = PathBuf::from(format!(".e2e-test-{}.db", test_id));
 
         // Start server process with environment variables
-        let process = Command::new("cargo")
-            .args(&["run", "--package", "web", "--features", "server"])
+        let mut process = Command::new("cargo")
+            .args(["run", "--package", "web", "--features", "server"])
             .env("APP_MODE", "local")
             .env("PORT", port.to_string())
             .env("IP", "127.0.0.1")
@@ -33,7 +33,12 @@ impl TestServer {
         let url = format!("http://localhost:{}", port);
 
         // Wait for server to be ready
-        wait_for_server(&url).await?;
+        if let Err(e) = wait_for_server(&url).await {
+            // Kill the process if server failed to start
+            let _ = process.kill();
+            let _ = process.wait();
+            return Err(e);
+        }
 
         Ok(Self {
             url,

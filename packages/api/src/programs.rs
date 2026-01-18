@@ -23,7 +23,6 @@ pub async fn create_program(
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
-        use uuid::Uuid;
 
         let author_user_id = crate::auth::require_user_id(id_token).await?;
         let state = crate::state::AppState::global();
@@ -95,7 +94,6 @@ pub async fn add_program_item(
     #[cfg(feature = "server")]
     {
         use uuid::Uuid;
-
         let user_id = crate::auth::require_user_id(id_token).await?;
         let pid =
             Uuid::parse_str(&program_id).map_err(|_| ServerFnError::new("invalid program_id"))?;
@@ -290,10 +288,10 @@ pub async fn get_program(id: String) -> Result<ProgramDetail, ServerFnError> {
         };
 
         let proposal_rows = sqlx::query(sql)
-        .bind(crate::db::uuid_to_db(program_id))
-        .fetch_all(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .bind(crate::db::uuid_to_db(program_id))
+            .fetch_all(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let mut proposals = Vec::with_capacity(proposal_rows.len());
         for row in proposal_rows {

@@ -14,5 +14,8 @@ async fn test_homepage_loads() {
     assert_eq!(response.status(), 200, "Homepage should return 200 OK");
 
     let body = response.text().await.expect("Failed to read body");
-    assert!(body.contains("Alelysee") || body.contains("DOCTYPE"), "Should contain HTML");
+    assert!(
+        body.contains("Alelysee") || body.contains("DOCTYPE"),
+        "Should contain HTML"
+    );
 }

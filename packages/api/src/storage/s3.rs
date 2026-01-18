@@ -11,6 +11,12 @@ impl S3StorageService {
     }
 }
 
+impl Default for S3StorageService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl StorageService for S3StorageService {
     async fn upload(&self, key: &str, _data: Vec<u8>) -> Result<()> {

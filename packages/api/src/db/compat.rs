@@ -1,7 +1,7 @@
-///! Backward compatibility layer for legacy pool() function
-///!
-///! This module provides the old `pool()` function that returns Pool<Postgres>
-///! for functions that haven't been migrated to AppState yet.
+//! Backward compatibility layer for legacy pool() function
+//!
+//! This module provides the old `pool()` function that returns Pool<Postgres>
+//! for functions that haven't been migrated to AppState yet.
 use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 use std::sync::OnceLock;
 

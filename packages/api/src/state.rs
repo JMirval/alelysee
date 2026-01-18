@@ -121,7 +121,7 @@ impl AppState {
                 // Ensure uploads directory exists
                 std::fs::create_dir_all(base_path)?;
 
-                Arc::new(FilesystemStorageService::new(&base_path, &serve_url))
+                Arc::new(FilesystemStorageService::new(base_path, serve_url))
             }
         };
 
@@ -183,8 +183,8 @@ impl AppState {
 /// Global state storage using OnceLock for thread-safe initialization
 pub(crate) static STATE: OnceLock<Arc<AppState>> = OnceLock::new();
 
-/// Thread-local state override for testing
 #[cfg(feature = "server")]
 thread_local! {
-    pub(crate) static TEST_STATE: std::cell::RefCell<Option<Arc<AppState>>> = std::cell::RefCell::new(None);
+    /// Thread-local state override for testing
+    pub(crate) static TEST_STATE: std::cell::RefCell<Option<Arc<AppState>>> = const { std::cell::RefCell::new(None) };
 }

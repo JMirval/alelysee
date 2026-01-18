@@ -1,6 +1,6 @@
 use super::{seed, Database};
 use anyhow::{Context, Result};
-use sqlx::{sqlite::SqlitePoolOptions, Any, Pool};
+use sqlx::{Any, Pool};
 use std::path::Path;
 
 pub struct SqliteDatabase {
@@ -23,6 +23,7 @@ impl SqliteDatabase {
             tokio::fs::OpenOptions::new()
                 .create(true)
                 .write(true)
+                .truncate(true)
                 .open(path)
                 .await
                 .context("Failed to create SQLite database file")?;

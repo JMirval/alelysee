@@ -1,6 +1,6 @@
-use anyhow::Result;
 use crate::config::DatabaseConfig;
-use sqlx::{Any, Pool, Postgres, Sqlite};
+use anyhow::Result;
+use sqlx::{Any, Pool, Postgres};
 use uuid::Uuid;
 
 mod compat;
@@ -42,14 +42,16 @@ pub fn datetime_from_db(
         return Ok(dt);
     }
 
-    let fmt_with_offset =
-        format_description!("[year]-[month]-[day] [hour]:[minute]:[second][offset_hour sign:mandatory][offset_minute]");
+    let fmt_with_offset = format_description!(
+        "[year]-[month]-[day] [hour]:[minute]:[second][offset_hour sign:mandatory][offset_minute]"
+    );
     if let Ok(dt) = time::OffsetDateTime::parse(value, &fmt_with_offset) {
         return Ok(dt);
     }
 
-    let fmt_with_offset_colon =
-        format_description!("[year]-[month]-[day] [hour]:[minute]:[second][offset_hour sign:mandatory]:[offset_minute]");
+    let fmt_with_offset_colon = format_description!(
+        "[year]-[month]-[day] [hour]:[minute]:[second][offset_hour sign:mandatory]:[offset_minute]"
+    );
     if let Ok(dt) = time::OffsetDateTime::parse(value, &fmt_with_offset_colon) {
         return Ok(dt);
     }

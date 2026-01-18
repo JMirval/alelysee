@@ -18,8 +18,6 @@ pub async fn create_proposal(
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
-        use time::OffsetDateTime;
-        use uuid::Uuid;
 
         let author_user_id = crate::auth::require_user_id(id_token).await?;
         let state = crate::state::AppState::global();
@@ -64,14 +62,14 @@ pub async fn create_proposal(
         };
 
         let row = sqlx::query(sql)
-        .bind(crate::db::uuid_to_db(author_user_id))
-        .bind(&title)
-        .bind(&summary)
-        .bind(&body_markdown)
-        .bind(&tags_json)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .bind(crate::db::uuid_to_db(author_user_id))
+            .bind(&title)
+            .bind(&summary)
+            .bind(&body_markdown)
+            .bind(&tags_json)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         // activity: created proposal
         let proposal_id: String = row.get("id");
@@ -114,7 +112,6 @@ pub async fn list_proposals(limit: i64) -> Result<Vec<Proposal>, ServerFnError> 
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
-        use time::OffsetDateTime;
 
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
@@ -159,10 +156,10 @@ pub async fn list_proposals(limit: i64) -> Result<Vec<Proposal>, ServerFnError> 
         };
 
         let rows = sqlx::query(sql)
-        .bind(limit)
-        .fetch_all(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .bind(limit)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let mut proposals = Vec::with_capacity(rows.len());
         for row in rows {
@@ -198,7 +195,6 @@ pub async fn get_proposal(id: String) -> Result<Proposal, ServerFnError> {
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
-        use time::OffsetDateTime;
         use uuid::Uuid;
 
         let pid = Uuid::parse_str(&id).map_err(|_| ServerFnError::new("invalid id"))?;
@@ -244,10 +240,10 @@ pub async fn get_proposal(id: String) -> Result<Proposal, ServerFnError> {
         };
 
         let row = sqlx::query(sql)
-        .bind(crate::db::uuid_to_db(pid))
-        .fetch_one(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .bind(crate::db::uuid_to_db(pid))
+            .fetch_one(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let id = crate::db::uuid_from_db(&row.get::<String, _>("id"))?;
         let author_user_id = crate::db::uuid_from_db(&row.get::<String, _>("author_user_id"))?;
@@ -286,7 +282,6 @@ pub async fn update_proposal(
     #[cfg(feature = "server")]
     {
         use sqlx::Row;
-        use time::OffsetDateTime;
         use uuid::Uuid;
 
         let user_id = crate::auth::require_user_id(id_token).await?;
@@ -355,14 +350,14 @@ pub async fn update_proposal(
         };
 
         let row = sqlx::query(sql)
-        .bind(crate::db::uuid_to_db(pid))
-        .bind(&title)
-        .bind(&summary)
-        .bind(&body_markdown)
-        .bind(&tags_json)
-        .fetch_one(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?;
+            .bind(crate::db::uuid_to_db(pid))
+            .bind(&title)
+            .bind(&summary)
+            .bind(&body_markdown)
+            .bind(&tags_json)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let score = sqlx::query_scalar::<_, i64>(
             "select coalesce(sum(value), 0) from votes where target_type = 'proposal' and target_id = $1",
