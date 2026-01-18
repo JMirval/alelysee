@@ -453,9 +453,13 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         let user_id = Uuid::new_v4();
         let auth_subject = user_id.to_string();
 
-        sqlx::query(
-            "insert into users (id, email, password_hash, auth_subject) values ($1, $2, $3, $4)",
-        )
+        let insert_user_sql = if crate::db::is_sqlite() {
+            "insert into users (id, email, password_hash, auth_subject) values ($1, $2, $3, $4)"
+        } else {
+            "insert into users (id, email, password_hash, auth_subject) values ($1::uuid, $2, $3, $4)"
+        };
+
+        sqlx::query(insert_user_sql)
         .bind(user_id.to_string())
         .bind(&email)
         .bind(&password_hash)
@@ -476,9 +480,13 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
             .map_err(|e| ServerFnError::new(format!("Failed to format timestamp: {}", e)))?;
 
         // Store verification token
-        sqlx::query(
-            "insert into email_verifications (user_id, token_hash, expires_at) values ($1, $2, $3)",
-        )
+        let insert_verification_sql = if crate::db::is_sqlite() {
+            "insert into email_verifications (user_id, token_hash, expires_at) values ($1, $2, $3)"
+        } else {
+            "insert into email_verifications (user_id, token_hash, expires_at) values ($1::uuid, $2, $3)"
+        };
+
+        sqlx::query(insert_verification_sql)
         .bind(user_id.to_string())
         .bind(&token_hash)
         .bind(&expires_at_str)
