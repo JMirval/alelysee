@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::net::TcpListener;
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -17,16 +17,16 @@ impl TestServer {
         let test_id = Uuid::new_v4();
         let db_path = PathBuf::from(format!(".e2e-test-{}.db", test_id));
 
-        // Set environment variables
-        std::env::set_var("APP_MODE", "local");
-        std::env::set_var("PORT", port.to_string());
-        std::env::set_var("IP", "127.0.0.1");
-        std::env::set_var("JWT_SECRET", "test-secret-key-min-32-characters-long");
-        std::env::set_var("APP_BASE_URL", format!("http://localhost:{}", port));
-
-        // Start server process
+        // Start server process with environment variables
         let process = Command::new("cargo")
             .args(&["run", "--package", "web", "--features", "server"])
+            .env("APP_MODE", "local")
+            .env("PORT", port.to_string())
+            .env("IP", "127.0.0.1")
+            .env("JWT_SECRET", "test-secret-key-min-32-characters-long")
+            .env("APP_BASE_URL", format!("http://localhost:{}", port))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()
             .expect("Failed to start server");
 
@@ -63,11 +63,19 @@ fn get_random_port() -> Result<u16> {
 }
 
 async fn wait_for_server(url: &str) -> Result<()> {
-    for _ in 0..30 {
-        if reqwest::get(url).await.is_ok() {
-            return Ok(());
+    // Wait up to 60 seconds for server to start (compilation + startup)
+    for i in 0..600 {
+        if let Ok(response) = reqwest::get(url).await {
+            if response.status().is_success() {
+                return Ok(());
+            }
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Log progress every 5 seconds
+        if i > 0 && i % 50 == 0 {
+            eprintln!("Still waiting for server... ({}s)", i / 10);
+        }
     }
-    anyhow::bail!("Server did not start in time")
+    anyhow::bail!("Server did not start in time (waited 60s)")
 }
