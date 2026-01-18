@@ -108,3 +108,6 @@ pub use programs::{add_program_item, create_program, get_program, list_programs,
 pub use proposals::{create_proposal, get_proposal, list_proposals, update_proposal};
 pub use uploads::{create_video_upload_intent, finalize_video_upload, list_videos};
 pub use votes::set_vote;
+
+#[cfg(test)]
+pub mod test_utils;
