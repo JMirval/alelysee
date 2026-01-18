@@ -31,7 +31,10 @@ impl TestServer {
             .env("JWT_SECRET", "test-secret-key-min-32-characters-long")
             .env("APP_BASE_URL", format!("http://localhost:{}", port))
             .env("LOCAL_DB_PATH", db_path.to_string_lossy().to_string())
-            .env("DIOXUS_PUBLIC_PATH", public_path.to_string_lossy().to_string())
+            .env(
+                "DIOXUS_PUBLIC_PATH",
+                public_path.to_string_lossy().to_string(),
+            )
             .stdout(Stdio::from(log_file))
             .stderr(Stdio::from(log_file_err))
             .spawn()
