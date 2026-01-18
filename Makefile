@@ -82,6 +82,14 @@ test-ui: ## Run UI-specific tests
 test-web: ## Run web-specific tests
 	cargo test --package web
 
+test-integration: ## Run API integration tests
+	cargo test --package api --test '*' --features server -- --test-threads=1
+
+test-e2e: ## Run E2E browser tests
+	cargo test --package e2e --test '*' -- --test-threads=1
+
+test-all: test test-integration test-e2e ## Run all tests (unit + integration + E2E)
+
 # Database
 # ========
 
