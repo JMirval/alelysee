@@ -185,11 +185,7 @@ async fn create_proposals(
     Ok(ids)
 }
 
-async fn create_programs(
-    pool: &Pool<Any>,
-    user_id: &str,
-    proposal_ids: &[String],
-) -> Result<()> {
+async fn create_programs(pool: &Pool<Any>, user_id: &str, proposal_ids: &[String]) -> Result<()> {
     // Create program 1: Progressive platform
     let program1_id = sqlx::query_scalar::<_, String>(
         r#"
