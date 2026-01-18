@@ -26,6 +26,7 @@ COPY packages/web/Cargo.toml packages/web/
 COPY packages/desktop/Cargo.toml packages/desktop/
 COPY packages/mobile/Cargo.toml packages/mobile/
 COPY packages/ui/Cargo.toml packages/ui/
+RUN sed -i '/tests\\/e2e/d' Cargo.toml
 
 # Copy assets
 COPY packages/ui/assets packages/ui/assets/
