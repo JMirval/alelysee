@@ -1,0 +1,73 @@
+use anyhow::Result;
+use std::net::TcpListener;
+use std::path::PathBuf;
+use std::process::{Child, Command};
+use std::time::Duration;
+use uuid::Uuid;
+
+pub struct TestServer {
+    url: String,
+    process: Option<Child>,
+    db_path: PathBuf,
+}
+
+impl TestServer {
+    pub async fn start() -> Result<Self> {
+        let port = get_random_port()?;
+        let test_id = Uuid::new_v4();
+        let db_path = PathBuf::from(format!(".e2e-test-{}.db", test_id));
+
+        // Set environment variables
+        std::env::set_var("APP_MODE", "local");
+        std::env::set_var("PORT", port.to_string());
+        std::env::set_var("IP", "127.0.0.1");
+        std::env::set_var("JWT_SECRET", "test-secret-key-min-32-characters-long");
+        std::env::set_var("APP_BASE_URL", format!("http://localhost:{}", port));
+
+        // Start server process
+        let process = Command::new("cargo")
+            .args(&["run", "--package", "web", "--features", "server"])
+            .spawn()
+            .expect("Failed to start server");
+
+        let url = format!("http://localhost:{}", port);
+
+        // Wait for server to be ready
+        wait_for_server(&url).await?;
+
+        Ok(Self {
+            url,
+            process: Some(process),
+            db_path,
+        })
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+}
+
+impl Drop for TestServer {
+    fn drop(&mut self) {
+        if let Some(mut process) = self.process.take() {
+            let _ = process.kill();
+        }
+        let _ = std::fs::remove_file(&self.db_path);
+    }
+}
+
+fn get_random_port() -> Result<u16> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let port = listener.local_addr()?.port();
+    Ok(port)
+}
+
+async fn wait_for_server(url: &str) -> Result<()> {
+    for _ in 0..30 {
+        if reqwest::get(url).await.is_ok() {
+            return Ok(());
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    anyhow::bail!("Server did not start in time")
+}
