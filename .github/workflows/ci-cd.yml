@@ -37,6 +37,27 @@ jobs:
       - name: Run tests
         run: make test-ci
 
+      - name: Run integration tests
+        run: make test-integration
+        env:
+          APP_MODE: local
+          JWT_SECRET: test-secret-key-for-ci-only-min-32-chars
+
+      - name: Run E2E tests
+        run: make test-e2e
+        env:
+          APP_MODE: local
+          JWT_SECRET: test-secret-key-for-ci-only-min-32-chars
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: |
+            .test-*.db
+            .e2e-test-*.db
+
       - name: Run lint checks
         run: make lint-ci
 
