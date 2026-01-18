@@ -8,10 +8,19 @@ pub struct Browser {
 
 impl Browser {
     pub fn launch() -> Result<Self> {
-        let options = LaunchOptions::default_builder()
-            .headless(true)
-            .build()
-            .expect("Failed to build launch options");
+        let headless = env_flag("HEADLESS", true);
+        let no_sandbox = env_flag("E2E_CHROME_NO_SANDBOX", env_flag("CI", false));
+        let chrome_path = std::env::var("E2E_CHROME_PATH")
+            .ok()
+            .filter(|value| !value.trim().is_empty());
+
+        let mut builder = LaunchOptions::default_builder();
+        let mut builder = builder.headless(headless).sandbox(!no_sandbox);
+        if let Some(path) = chrome_path {
+            builder = builder.path(Some(path.into()));
+        }
+
+        let options = builder.build().expect("Failed to build launch options");
 
         let browser = ChromeBrowser::new(options)?;
 
@@ -56,5 +65,12 @@ impl Page {
 
     pub fn url(&self) -> Result<String> {
         Ok(self.tab.get_url())
+    }
+}
+
+fn env_flag(key: &str, default_value: bool) -> bool {
+    match std::env::var(key) {
+        Ok(value) => matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"),
+        Err(_) => default_value,
     }
 }

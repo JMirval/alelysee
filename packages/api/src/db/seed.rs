@@ -4,6 +4,7 @@ use argon2::{
     Argon2,
 };
 use sqlx::{Any, Pool};
+use uuid::Uuid;
 
 pub async fn seed_database(pool: &Pool<Any>) -> Result<()> {
     tracing::info!("Starting database seeding...");
@@ -17,65 +18,66 @@ pub async fn seed_database(pool: &Pool<Any>) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to hash password: {}", e))?
         .to_string();
 
-    // Create 3 users
-    let user1_id = sqlx::query_scalar::<_, i32>(
-        r#"
-        INSERT INTO users (email, password_hash, username, is_verified, created_at)
-        VALUES ($1, $2, $3, true, datetime('now'))
-        RETURNING id
-        "#,
-    )
-    .bind("user1@local.dev")
-    .bind(&password_hash)
-    .bind("Alice Dupont")
-    .fetch_one(pool)
-    .await
-    .context("Failed to create user1")?;
+    let users = vec![
+        ("user1@local.dev", "Alice Dupont"),
+        ("user2@local.dev", "Bob Martin"),
+        ("user3@local.dev", "Claire Lefebvre"),
+    ];
 
-    let user2_id = sqlx::query_scalar::<_, i32>(
-        r#"
-        INSERT INTO users (email, password_hash, username, is_verified, created_at)
-        VALUES ($1, $2, $3, true, datetime('now'))
-        RETURNING id
-        "#,
-    )
-    .bind("user2@local.dev")
-    .bind(&password_hash)
-    .bind("Bob Martin")
-    .fetch_one(pool)
-    .await
-    .context("Failed to create user2")?;
+    let mut user_ids = Vec::with_capacity(users.len());
+    for (email, display_name) in users {
+        let user_id = Uuid::new_v4().to_string();
+        let auth_subject = user_id.clone();
+        sqlx::query(
+            r#"
+            INSERT INTO users (id, auth_subject, email, password_hash, email_verified)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+        )
+        .bind(&user_id)
+        .bind(&auth_subject)
+        .bind(email)
+        .bind(&password_hash)
+        .bind(true)
+        .execute(pool)
+        .await
+        .with_context(|| format!("Failed to create user {email}"))?;
 
-    let user3_id = sqlx::query_scalar::<_, i32>(
-        r#"
-        INSERT INTO users (email, password_hash, username, is_verified, created_at)
-        VALUES ($1, $2, $3, true, datetime('now'))
-        RETURNING id
-        "#,
-    )
-    .bind("user3@local.dev")
-    .bind(&password_hash)
-    .bind("Claire Lefebvre")
-    .fetch_one(pool)
-    .await
-    .context("Failed to create user3")?;
+        sqlx::query(
+            r#"
+            INSERT INTO profiles (user_id, display_name)
+            VALUES ($1, $2)
+            "#,
+        )
+        .bind(&user_id)
+        .bind(display_name)
+        .execute(pool)
+        .await
+        .with_context(|| format!("Failed to create profile for {email}"))?;
+
+        user_ids.push(user_id);
+    }
+
+    let user1_id = user_ids[0].clone();
+    let user2_id = user_ids[1].clone();
+    let user3_id = user_ids[2].clone();
 
     tracing::info!("Created 3 users");
 
     // Create proposals
-    let proposal_ids = create_proposals(pool, user1_id, user2_id, user3_id).await?;
+    let proposal_ids = create_proposals(pool, &user1_id, &user2_id, &user3_id).await?;
     tracing::info!("Created {} proposals", proposal_ids.len());
 
     // Create programs
-    create_programs(pool, user1_id, &proposal_ids).await?;
+    create_programs(pool, &user1_id, &proposal_ids).await?;
     tracing::info!("Created programs");
 
     // Create comments
-    create_comments(pool, user1_id, user2_id, user3_id, &proposal_ids).await?;
+    create_comments(pool, &user1_id, &user2_id, &user3_id, &proposal_ids).await?;
     tracing::info!("Created comments");
 
     // Create votes
-    create_votes(pool, user1_id, user2_id, user3_id, &proposal_ids).await?;
+    create_votes(pool, &user1_id, &user2_id, &user3_id, &proposal_ids).await?;
     tracing::info!("Created votes");
 
     tracing::info!("Database seeding completed successfully");
@@ -84,10 +86,10 @@ pub async fn seed_database(pool: &Pool<Any>) -> Result<()> {
 
 async fn create_proposals(
     pool: &Pool<Any>,
-    user1_id: i32,
-    user2_id: i32,
-    user3_id: i32,
-) -> Result<Vec<i32>> {
+    user1_id: &str,
+    user2_id: &str,
+    user3_id: &str,
+) -> Result<Vec<String>> {
     let mut ids = Vec::new();
 
     let proposals = vec![
@@ -154,17 +156,25 @@ async fn create_proposals(
     ];
 
     for (user_id, title, description, tags) in proposals {
-        let id = sqlx::query_scalar::<_, i32>(
+        let tags_json = serde_json::to_string(
+            &tags
+                .split(',')
+                .map(|tag| tag.trim().to_string())
+                .filter(|tag| !tag.is_empty())
+                .collect::<Vec<_>>(),
+        )?;
+        let id = sqlx::query_scalar::<_, String>(
             r#"
-            INSERT INTO proposals (user_id, title, description, tags, status, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, 'published', datetime('now'), datetime('now'))
-            RETURNING id
+            INSERT INTO proposals (author_user_id, title, summary, body_markdown, tags)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING CAST(id as TEXT)
             "#,
         )
         .bind(user_id)
         .bind(title)
         .bind(description)
-        .bind(tags)
+        .bind(description)
+        .bind(tags_json)
         .fetch_one(pool)
         .await
         .context("Failed to create proposal")?;
@@ -175,31 +185,36 @@ async fn create_proposals(
     Ok(ids)
 }
 
-async fn create_programs(pool: &Pool<Any>, user_id: i32, proposal_ids: &[i32]) -> Result<()> {
+async fn create_programs(
+    pool: &Pool<Any>,
+    user_id: &str,
+    proposal_ids: &[String],
+) -> Result<()> {
     // Create program 1: Progressive platform
-    let program1_id = sqlx::query_scalar::<_, i32>(
+    let program1_id = sqlx::query_scalar::<_, String>(
         r#"
-        INSERT INTO programs (user_id, title, description, created_at, updated_at)
-        VALUES ($1, $2, $3, datetime('now'), datetime('now'))
-        RETURNING id
+        INSERT INTO programs (author_user_id, title, summary, body_markdown)
+        VALUES ($1, $2, $3, $4)
+        RETURNING CAST(id as TEXT)
         "#,
     )
     .bind(user_id)
     .bind("Programme Progressiste 2027")
+    .bind("Un programme ambitieux pour une société plus juste, écologique et démocratique.")
     .bind("Un programme ambitieux pour une société plus juste, écologique et démocratique.")
     .fetch_one(pool)
     .await
     .context("Failed to create program 1")?;
 
     // Link first 5 proposals to program 1
-    for (position, &proposal_id) in proposal_ids.iter().take(5).enumerate() {
+    for (position, proposal_id) in proposal_ids.iter().take(5).enumerate() {
         sqlx::query(
             r#"
-            INSERT INTO program_proposals (program_id, proposal_id, position)
+            INSERT INTO program_items (program_id, proposal_id, position)
             VALUES ($1, $2, $3)
             "#,
         )
-        .bind(program1_id)
+        .bind(&program1_id)
         .bind(proposal_id)
         .bind(position as i32)
         .execute(pool)
@@ -208,33 +223,34 @@ async fn create_programs(pool: &Pool<Any>, user_id: i32, proposal_ids: &[i32]) -
     }
 
     // Create program 2: Ecological transition
-    let program2_id = sqlx::query_scalar::<_, i32>(
+    let program2_id = sqlx::query_scalar::<_, String>(
         r#"
-        INSERT INTO programs (user_id, title, description, created_at, updated_at)
-        VALUES ($1, $2, $3, datetime('now'), datetime('now'))
-        RETURNING id
+        INSERT INTO programs (author_user_id, title, summary, body_markdown)
+        VALUES ($1, $2, $3, $4)
+        RETURNING CAST(id as TEXT)
         "#,
     )
     .bind(user_id)
     .bind("Transition Écologique Maintenant")
+    .bind("Placer l'urgence climatique au cœur de l'action politique.")
     .bind("Placer l'urgence climatique au cœur de l'action politique.")
     .fetch_one(pool)
     .await
     .context("Failed to create program 2")?;
 
     // Link environmental proposals to program 2
-    for (position, &proposal_id) in [proposal_ids[2], proposal_ids[6], proposal_ids[8]]
+    for (position, proposal_id) in [&proposal_ids[2], &proposal_ids[6], &proposal_ids[8]]
         .iter()
         .enumerate()
     {
         sqlx::query(
             r#"
-            INSERT INTO program_proposals (program_id, proposal_id, position)
+            INSERT INTO program_items (program_id, proposal_id, position)
             VALUES ($1, $2, $3)
             "#,
         )
-        .bind(program2_id)
-        .bind(proposal_id)
+        .bind(&program2_id)
+        .bind(*proposal_id)
         .bind(position as i32)
         .execute(pool)
         .await
@@ -246,38 +262,38 @@ async fn create_programs(pool: &Pool<Any>, user_id: i32, proposal_ids: &[i32]) -
 
 async fn create_comments(
     pool: &Pool<Any>,
-    user1_id: i32,
-    user2_id: i32,
-    user3_id: i32,
-    proposal_ids: &[i32],
+    user1_id: &str,
+    user2_id: &str,
+    user3_id: &str,
+    proposal_ids: &[String],
 ) -> Result<()> {
     let comments = vec![
-        (user2_id, proposal_ids[0], None::<i32>, "Excellente idée ! Des études montrent que la productivité augmente avec moins d'heures."),
-        (user3_id, proposal_ids[0], None::<i32>, "Comment financer cela sans réduction de salaire ? Il faut plus de détails."),
-        (user1_id, proposal_ids[1], None::<i32>, "Le revenu universel pourrait éliminer la pauvreté et simplifier le système social."),
-        (user2_id, proposal_ids[2], None::<i32>, "Absolument nécessaire pour sauver les pollinisateurs !"),
-        (user3_id, proposal_ids[2], None::<i32>, "Les agriculteurs ont besoin d'alternatives viables. Il faut les accompagner."),
-        (user1_id, proposal_ids[3], None::<i32>, "La gratuité des transports réduirait aussi la pollution urbaine."),
-        (user2_id, proposal_ids[4], None::<i32>, "20% c'est bien, mais il faudrait viser 30% pour rattraper le retard."),
-        (user3_id, proposal_ids[5], None::<i32>, "La légalisation permettrait de mieux contrôler la qualité et de réduire le trafic."),
-        (user1_id, proposal_ids[5], None::<i32>, "Il faut aussi prévoir de la prévention et de l'éducation sur les risques."),
-        (user2_id, proposal_ids[6], None::<i32>, "Les aides doivent être suffisantes pour que ce ne soit pas qu'un cadeau aux riches."),
-        (user3_id, proposal_ids[7], None::<i32>, "La démocratie directe est l'avenir ! Donnons le pouvoir au peuple."),
-        (user1_id, proposal_ids[7], None::<i32>, "Attention aux dérives populistes. Il faut des garde-fous."),
-        (user2_id, proposal_ids[8], None::<i32>, "Bonne idée mais 6 mois c'est peut-être trop long. 3 mois suffiraient."),
-        (user3_id, proposal_ids[9], None::<i32>, "Enfin une mesure concrète contre les inégalités scandaleuses !"),
-        (user1_id, proposal_ids[9], None::<i32>, "Le ratio 1 pour 20 existe déjà dans certaines entreprises coopératives."),
+        (user2_id, &proposal_ids[0], None::<&str>, "Excellente idée ! Des études montrent que la productivité augmente avec moins d'heures."),
+        (user3_id, &proposal_ids[0], None::<&str>, "Comment financer cela sans réduction de salaire ? Il faut plus de détails."),
+        (user1_id, &proposal_ids[1], None::<&str>, "Le revenu universel pourrait éliminer la pauvreté et simplifier le système social."),
+        (user2_id, &proposal_ids[2], None::<&str>, "Absolument nécessaire pour sauver les pollinisateurs !"),
+        (user3_id, &proposal_ids[2], None::<&str>, "Les agriculteurs ont besoin d'alternatives viables. Il faut les accompagner."),
+        (user1_id, &proposal_ids[3], None::<&str>, "La gratuité des transports réduirait aussi la pollution urbaine."),
+        (user2_id, &proposal_ids[4], None::<&str>, "20% c'est bien, mais il faudrait viser 30% pour rattraper le retard."),
+        (user3_id, &proposal_ids[5], None::<&str>, "La légalisation permettrait de mieux contrôler la qualité et de réduire le trafic."),
+        (user1_id, &proposal_ids[5], None::<&str>, "Il faut aussi prévoir de la prévention et de l'éducation sur les risques."),
+        (user2_id, &proposal_ids[6], None::<&str>, "Les aides doivent être suffisantes pour que ce ne soit pas qu'un cadeau aux riches."),
+        (user3_id, &proposal_ids[7], None::<&str>, "La démocratie directe est l'avenir ! Donnons le pouvoir au peuple."),
+        (user1_id, &proposal_ids[7], None::<&str>, "Attention aux dérives populistes. Il faut des garde-fous."),
+        (user2_id, &proposal_ids[8], None::<&str>, "Bonne idée mais 6 mois c'est peut-être trop long. 3 mois suffiraient."),
+        (user3_id, &proposal_ids[9], None::<&str>, "Enfin une mesure concrète contre les inégalités scandaleuses !"),
+        (user1_id, &proposal_ids[9], None::<&str>, "Le ratio 1 pour 20 existe déjà dans certaines entreprises coopératives."),
     ];
 
     for (user_id, proposal_id, parent_id, content) in comments {
         sqlx::query(
             r#"
-            INSERT INTO comments (proposal_id, user_id, parent_id, content, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, datetime('now'), datetime('now'))
+            INSERT INTO comments (author_user_id, target_type, target_id, parent_comment_id, body_markdown)
+            VALUES ($1, 'proposal', $2, $3, $4)
             "#,
         )
-        .bind(proposal_id)
         .bind(user_id)
+        .bind(proposal_id)
         .bind(parent_id)
         .bind(content)
         .execute(pool)
@@ -290,17 +306,17 @@ async fn create_comments(
 
 async fn create_votes(
     pool: &Pool<Any>,
-    user1_id: i32,
-    user2_id: i32,
-    user3_id: i32,
-    proposal_ids: &[i32],
+    user1_id: &str,
+    user2_id: &str,
+    user3_id: &str,
+    proposal_ids: &[String],
 ) -> Result<()> {
     // User 1 votes
-    for &proposal_id in &proposal_ids[0..7] {
+    for proposal_id in &proposal_ids[0..7] {
         sqlx::query(
             r#"
-            INSERT INTO votes (user_id, proposal_id, vote_type, created_at)
-            VALUES ($1, $2, 'for', datetime('now'))
+            INSERT INTO votes (user_id, target_type, target_id, value)
+            VALUES ($1, 'proposal', $2, 1)
             "#,
         )
         .bind(user1_id)
@@ -311,11 +327,11 @@ async fn create_votes(
     }
 
     // User 2 votes (mostly positive, some against)
-    for &proposal_id in &proposal_ids[0..5] {
+    for proposal_id in &proposal_ids[0..5] {
         sqlx::query(
             r#"
-            INSERT INTO votes (user_id, proposal_id, vote_type, created_at)
-            VALUES ($1, $2, 'for', datetime('now'))
+            INSERT INTO votes (user_id, target_type, target_id, value)
+            VALUES ($1, 'proposal', $2, 1)
             "#,
         )
         .bind(user2_id)
@@ -327,22 +343,22 @@ async fn create_votes(
 
     sqlx::query(
         r#"
-        INSERT INTO votes (user_id, proposal_id, vote_type, created_at)
-        VALUES ($1, $2, 'against', datetime('now'))
+        INSERT INTO votes (user_id, target_type, target_id, value)
+        VALUES ($1, 'proposal', $2, -1)
         "#,
     )
     .bind(user2_id)
-    .bind(proposal_ids[5])
+    .bind(&proposal_ids[5])
     .execute(pool)
     .await
     .context("Failed to create vote")?;
 
     // User 3 votes (mixed)
-    for &proposal_id in &proposal_ids[1..4] {
+    for proposal_id in &proposal_ids[1..4] {
         sqlx::query(
             r#"
-            INSERT INTO votes (user_id, proposal_id, vote_type, created_at)
-            VALUES ($1, $2, 'for', datetime('now'))
+            INSERT INTO votes (user_id, target_type, target_id, value)
+            VALUES ($1, 'proposal', $2, 1)
             "#,
         )
         .bind(user3_id)
@@ -352,11 +368,11 @@ async fn create_votes(
         .context("Failed to create vote")?;
     }
 
-    for &proposal_id in &proposal_ids[7..10] {
+    for proposal_id in &proposal_ids[7..10] {
         sqlx::query(
             r#"
-            INSERT INTO votes (user_id, proposal_id, vote_type, created_at)
-            VALUES ($1, $2, 'for', datetime('now'))
+            INSERT INTO votes (user_id, target_type, target_id, value)
+            VALUES ($1, 'proposal', $2, 1)
             "#,
         )
         .bind(user3_id)
