@@ -20,6 +20,7 @@ impl TestServer {
         let log_path = std::env::temp_dir().join(format!("e2e-server-{}.log", test_id));
         let log_file = std::fs::File::create(&log_path)?;
         let log_file_err = log_file.try_clone()?;
+        let public_path = workspace_public_path();
 
         // Start server process with environment variables
         let mut process = Command::new("cargo")
@@ -30,6 +31,7 @@ impl TestServer {
             .env("JWT_SECRET", "test-secret-key-min-32-characters-long")
             .env("APP_BASE_URL", format!("http://localhost:{}", port))
             .env("LOCAL_DB_PATH", db_path.to_string_lossy().to_string())
+            .env("DIOXUS_PUBLIC_PATH", public_path.to_string_lossy().to_string())
             .stdout(Stdio::from(log_file))
             .stderr(Stdio::from(log_file_err))
             .spawn()
@@ -137,4 +139,12 @@ fn format_log_tail(log_path: &Path, log_tail: Option<String>) -> String {
         }
         _ => format!("No server logs captured. Log file: {}", log_path.display()),
     }
+}
+
+fn workspace_public_path() -> PathBuf {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("public");
+    path.canonicalize().unwrap_or(path)
 }
