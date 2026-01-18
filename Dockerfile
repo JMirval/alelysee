@@ -26,7 +26,6 @@ COPY packages/web/Cargo.toml packages/web/
 COPY packages/desktop/Cargo.toml packages/desktop/
 COPY packages/mobile/Cargo.toml packages/mobile/
 COPY packages/ui/Cargo.toml packages/ui/
-RUN sed -i '/tests\\/e2e/d' Cargo.toml
 
 # Copy assets
 COPY packages/ui/assets packages/ui/assets/
@@ -44,7 +43,8 @@ RUN mkdir -p packages/api/src packages/web/src packages/desktop/src packages/mob
     echo "fn main() {}" > packages/ui/src/lib.rs
 
 # Build dependencies (this layer will be cached)
-RUN cargo build --release --workspace && \
+RUN sed -i '/tests\\/e2e/d' Cargo.toml && \
+    cargo build --release --workspace && \
     rm -rf packages/*/src && \
     rm -rf target/release/deps/*target*
 
