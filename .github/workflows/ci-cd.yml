@@ -56,6 +56,7 @@ jobs:
         env:
           APP_MODE: local
           JWT_SECRET: test-secret-key-for-ci-only-min-32-chars
+          E2E_SERVER_STARTUP_TIMEOUT_SECS: 240
 
       - name: Upload test artifacts on failure
         if: failure()
