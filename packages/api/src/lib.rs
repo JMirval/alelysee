@@ -114,7 +114,9 @@ pub async fn auth_me(id_token: String) -> Result<auth::Me, ServerFnError> {
 }
 
 pub use activity::list_my_activity;
-pub use auth::{request_password_reset, reset_password, signin, signup, verify_email};
+pub use auth::{
+    request_password_reset, resend_verification_email, reset_password, signin, signup, verify_email,
+};
 pub use comments::{create_comment, list_comments};
 pub use profile::upsert_profile;
 pub use programs::ProgramDetail;

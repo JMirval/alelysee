@@ -78,12 +78,13 @@ pub fn SignIn() -> Element {
     let navigator = use_navigator();
     let lang = crate::use_lang()();
     let toasts = crate::use_toasts();
+    let toasts_submit = toasts.clone();
 
     let on_submit = move |evt: Event<FormData>| {
         evt.prevent_default();
         show_resend.set(false);
         let navigator = navigator;
-        let toasts = toasts.clone();
+        let toasts = toasts_submit.clone();
         spawn(async move {
             match api::signin(email(), password()).await {
                 Ok(token) => {
@@ -117,12 +118,13 @@ pub fn SignIn() -> Element {
         });
     };
 
+    let toasts_resend = toasts.clone();
     let on_resend = move |_| {
         if resend_pending() {
             return;
         }
+        let toasts = toasts_resend.clone();
         resend_pending.set(true);
-        let toasts = toasts.clone();
         let lang = lang;
         let email = email();
         spawn(async move {
@@ -709,7 +711,9 @@ pub fn MePage() -> Element {
                     None => rsx! {
                         p { {crate::t(lang, "common.loading")} }
                     },
-                    Some(Err(_)) => rsx! { p { class: "hint", {crate::t(lang, "common.error_try_again")} } },
+                    Some(Err(_)) => rsx! {
+                        p { class: "hint", {crate::t(lang, "common.error_try_again")} }
+                    },
                     Some(Ok(me)) => rsx! {
                         p {
                             {crate::t(lang, "me.user_id")}

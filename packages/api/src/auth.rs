@@ -646,7 +646,9 @@ pub async fn resend_verification_email(email: String) -> Result<(), ServerFnErro
     #[cfg(not(feature = "server"))]
     {
         let _ = email;
-        Err(ServerFnError::new("resend_verification_email is server-only"))
+        Err(ServerFnError::new(
+            "resend_verification_email is server-only",
+        ))
     }
 
     #[cfg(feature = "server")]
