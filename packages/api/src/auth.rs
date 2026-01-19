@@ -640,6 +640,88 @@ pub async fn signin(email: String, password: String) -> Result<String, ServerFnE
     }
 }
 
+/// Resend verification email (always returns success for security)
+#[dioxus::prelude::post("/api/auth/resend-verification")]
+pub async fn resend_verification_email(email: String) -> Result<(), ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = email;
+        Err(ServerFnError::new("resend_verification_email is server-only"))
+    }
+
+    #[cfg(feature = "server")]
+    {
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
+        tracing::info!(
+            "auth.resend_verification_email: email={}",
+            server::email_label(&email)
+        );
+
+        let user = sqlx::query(
+            "select CAST(id as TEXT) as id, email_verified, password_hash from users where email = $1",
+        )
+        .bind(&email)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        if let Some(user) = user {
+            let user_id = crate::db::uuid_from_db(&user.get::<String, _>("id"))?;
+            let password_hash: Option<String> = user.get("password_hash");
+            let email_verified: bool = match user.try_get::<bool, _>("email_verified") {
+                Ok(v) => v,
+                Err(_) => {
+                    let v: i64 = user.get("email_verified");
+                    v != 0
+                }
+            };
+
+            if !email_verified && password_hash.is_some() {
+                let token = crate::email::generate_token();
+                let token_hash = crate::email::hash_token(&token);
+                let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(24);
+                let expires_at_str = expires_at
+                    .format(&time::format_description::well_known::Rfc3339)
+                    .map_err(|e| {
+                        ServerFnError::new(format!("Failed to format timestamp: {}", e))
+                    })?;
+
+                let insert = if crate::db::is_sqlite() {
+                    sqlx::query(
+                        "insert into email_verifications (user_id, token_hash, expires_at) values ($1, $2, $3)",
+                    )
+                    .bind(user_id.to_string())
+                    .bind(&token_hash)
+                    .bind(&expires_at_str)
+                } else {
+                    sqlx::query(
+                        "insert into email_verifications (user_id, token_hash, expires_at) values ($1::uuid, $2, $3::timestamptz)",
+                    )
+                    .bind(user_id.to_string())
+                    .bind(&token_hash)
+                    .bind(&expires_at_str)
+                };
+
+                if let Err(e) = insert.execute(pool).await {
+                    tracing::warn!("auth.resend_verification_email: store token failed: {}", e);
+                } else if let Err(e) =
+                    crate::email::send_verification_email(state.email.as_ref(), &email, &token)
+                        .await
+                {
+                    tracing::warn!("auth.resend_verification_email: send email failed: {}", e);
+                } else {
+                    tracing::info!("auth.resend_verification_email: dispatched");
+                }
+            }
+        } else {
+            tracing::debug!("auth.resend_verification_email: user not found");
+        }
+
+        Ok(())
+    }
+}
+
 /// Request password reset (always returns success for security)
 #[dioxus::prelude::post("/api/auth/request-password-reset")]
 pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> {

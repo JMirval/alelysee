@@ -73,12 +73,15 @@ pub fn SignIn() -> Element {
     let mut email = use_signal(String::new);
     let mut password = use_signal(String::new);
     let mut id_token = use_context::<Signal<Option<String>>>();
+    let mut show_resend = use_signal(|| false);
+    let mut resend_pending = use_signal(|| false);
     let navigator = use_navigator();
     let lang = crate::use_lang()();
     let toasts = crate::use_toasts();
 
     let on_submit = move |evt: Event<FormData>| {
         evt.prevent_default();
+        show_resend.set(false);
         let navigator = navigator;
         let toasts = toasts.clone();
         spawn(async move {
@@ -101,12 +104,43 @@ pub fn SignIn() -> Element {
                     navigator.push("/me");
                 }
                 Err(e) => {
+                    let message = e.to_string();
+                    if message.to_lowercase().contains("verify your email") {
+                        show_resend.set(true);
+                    }
                     toasts.error(
                         crate::t(lang, "toast.signin_failed_title"),
+                        Some(format!("{} {message}", crate::t(lang, "toast.details"))),
+                    );
+                }
+            }
+        });
+    };
+
+    let on_resend = move |_| {
+        if resend_pending() {
+            return;
+        }
+        resend_pending.set(true);
+        let toasts = toasts.clone();
+        let lang = lang;
+        let email = email();
+        spawn(async move {
+            match api::resend_verification_email(email).await {
+                Ok(()) => {
+                    toasts.success(
+                        crate::t(lang, "auth.resend.title"),
+                        Some(crate::t(lang, "auth.resend.body")),
+                    );
+                }
+                Err(e) => {
+                    toasts.error(
+                        crate::t(lang, "auth.resend.failed_title"),
                         Some(format!("{} {e}", crate::t(lang, "toast.details"))),
                     );
                 }
             }
+            resend_pending.set(false);
         });
     };
 
@@ -126,7 +160,10 @@ pub fn SignIn() -> Element {
                         name: "email",
                         required: true,
                         value: "{email}",
-                        oninput: move |e| email.set(e.value()),
+                        oninput: move |e| {
+                            show_resend.set(false);
+                            email.set(e.value());
+                        },
                     }
                 }
 
@@ -138,7 +175,10 @@ pub fn SignIn() -> Element {
                         name: "password",
                         required: true,
                         value: "{password}",
-                        oninput: move |e| password.set(e.value()),
+                        oninput: move |e| {
+                            show_resend.set(false);
+                            password.set(e.value());
+                        },
                     }
                 }
 
@@ -149,6 +189,23 @@ pub fn SignIn() -> Element {
 
             p { class: "hint",
                 a { href: "/auth/reset-password", {crate::t(lang, "auth.signin.forgot_password")} }
+            }
+
+            if show_resend() {
+                div { class: "hint",
+                    p { {crate::t(lang, "auth.resend.prompt")} }
+                    button {
+                        class: "btn",
+                        r#type: "button",
+                        disabled: resend_pending(),
+                        onclick: on_resend,
+                        if resend_pending() {
+                            {crate::t(lang, "auth.resend.sending")}
+                        } else {
+                            {crate::t(lang, "auth.resend.cta")}
+                        }
+                    }
+                }
             }
 
             p { class: "hint",

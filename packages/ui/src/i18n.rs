@@ -331,6 +331,12 @@ pub fn t(lang: Lang, key: &str) -> String {
         (Lang::Fr, "auth.signin.forgot_password") => "Mot de passe oublié ?".to_string(),
         (Lang::Fr, "auth.signin.no_account") => "Pas de compte ?".to_string(),
         (Lang::Fr, "auth.signin.signup_link") => "S'inscrire".to_string(),
+        (Lang::Fr, "auth.resend.prompt") => "Votre e-mail n'est pas verifie ? Renvoyer le lien :".to_string(),
+        (Lang::Fr, "auth.resend.cta") => "Renvoyer l'e-mail de verification".to_string(),
+        (Lang::Fr, "auth.resend.sending") => "Envoi en cours…".to_string(),
+        (Lang::Fr, "auth.resend.title") => "E-mail de verification renvoye".to_string(),
+        (Lang::Fr, "auth.resend.body") => "Si cette adresse est en attente de verification, un nouveau lien a ete envoye.".to_string(),
+        (Lang::Fr, "auth.resend.failed_title") => "Echec de l'envoi".to_string(),
 
         (Lang::Fr, "auth.verify.title") => "Vérification de l'e-mail".to_string(),
         (Lang::Fr, "auth.verify.success") => "E-mail vérifié ! Vous pouvez maintenant vous connecter.".to_string(),
@@ -352,6 +358,13 @@ pub fn t(lang: Lang, key: &str) -> String {
 
         (Lang::Fr, "auth.error.passwords_dont_match") => "Les mots de passe ne correspondent pas".to_string(),
         (Lang::Fr, "auth.error.invalid_email") => "Adresse e-mail invalide".to_string(),
+
+        (Lang::En, "auth.resend.prompt") => "Email not verified? Resend the link:".to_string(),
+        (Lang::En, "auth.resend.cta") => "Resend verification email".to_string(),
+        (Lang::En, "auth.resend.sending") => "Sending…".to_string(),
+        (Lang::En, "auth.resend.title") => "Verification email sent".to_string(),
+        (Lang::En, "auth.resend.body") => "If this address is pending verification, a new link was sent.".to_string(),
+        (Lang::En, "auth.resend.failed_title") => "Failed to send".to_string(),
 
         // Fallback: use French string if present, else show key.
         (Lang::En, k) => t(Lang::Fr, k),

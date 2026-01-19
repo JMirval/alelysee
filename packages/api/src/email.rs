@@ -57,6 +57,14 @@ impl EmailService for SmtpEmailService {
         let smtp_from_email = std::env::var("SMTP_FROM_EMAIL")?;
         let smtp_from_name =
             std::env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Alelysee".to_string());
+        debug!(
+            "email.smtp.config: host={} port={} from_email={} from_name_len={} username_len={}",
+            smtp_host,
+            smtp_port,
+            email_label(&smtp_from_email),
+            smtp_from_name.len(),
+            smtp_username.len()
+        );
 
         let email = Message::builder()
             .from(format!("{} <{}>", smtp_from_name, smtp_from_email).parse()?)
@@ -69,7 +77,8 @@ impl EmailService for SmtpEmailService {
             )?;
 
         let creds = Credentials::new(smtp_username, smtp_password);
-        let mailer = SmtpTransport::relay(&smtp_host)?
+        let mailer = SmtpTransport::relay(&smtp_host)
+            .map_err(|e| anyhow::anyhow!("SMTP relay init failed: {}", e))?
             .port(smtp_port)
             .credentials(creds)
             .build();
@@ -77,7 +86,8 @@ impl EmailService for SmtpEmailService {
         // Wrap blocking SMTP operation in spawn_blocking
         tokio::task::spawn_blocking(move || mailer.send(&email))
             .await
-            .map_err(|e| anyhow::anyhow!("Task join error: {}", e))??;
+            .map_err(|e| anyhow::anyhow!("SMTP send task join error: {}", e))?
+            .map_err(|e| anyhow::anyhow!("SMTP send failed: {}", e))?;
 
         Ok(())
     }
