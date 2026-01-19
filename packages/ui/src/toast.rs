@@ -77,13 +77,23 @@ fn ToastViewport(toasts: Signal<Vec<Toast>>) -> Element {
     let items = toasts();
     rsx! {
         div { class: "toast_region", role: "status", "aria-live": "polite",
-            for toast in items.iter() {
+            for (index, toast) in items.iter().rev().enumerate() {
                 div {
                     key: "{toast.id}",
                     class: match toast.kind {
                         ToastKind::Error => "toast toast_error",
                         ToastKind::Info => "toast toast_info",
                         ToastKind::Success => "toast toast_success",
+                    },
+                    style: "--toast-index: {index};",
+                    onanimationend: {
+                        let id = toast.id;
+                        let mut toasts = toasts;
+                        move |evt: Event<AnimationData>| {
+                            if evt.data.animation_name() == "toast_out" {
+                                toasts.with_mut(|items| items.retain(|t| t.id != id));
+                            }
+                        }
                     },
                     div { class: "toast_content",
                         div { class: "toast_title", "{toast.title}" }

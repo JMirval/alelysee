@@ -425,8 +425,8 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         // Get database pool from state
         let pool = state.db.pool().await;
 
-        // Check if email already exists
-        let existing = sqlx::query("select id from users where email = $1")
+        // Check if email already exists (select 1 avoids UUID decoding on Postgres)
+        let existing = sqlx::query("select 1 from users where email = $1")
             .bind(&email)
             .fetch_optional(pool)
             .await
@@ -473,26 +473,33 @@ pub async fn signup(email: String, password: String) -> Result<(), ServerFnError
         let token = crate::email::generate_token();
         let token_hash = crate::email::hash_token(&token);
 
-        // Calculate expiration as ISO 8601 string (works with both Postgres and SQLite)
+        // Calculate expiration; use native timestamptz on Postgres, RFC3339 text on SQLite.
         let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(24);
         let expires_at_str = expires_at
             .format(&time::format_description::well_known::Rfc3339)
             .map_err(|e| ServerFnError::new(format!("Failed to format timestamp: {}", e)))?;
 
-        // Store verification token
-        let insert_verification_sql = if crate::db::is_sqlite() {
-            "insert into email_verifications (user_id, token_hash, expires_at) values ($1, $2, $3)"
-        } else {
-            "insert into email_verifications (user_id, token_hash, expires_at) values ($1::uuid, $2, $3)"
-        };
-
-        sqlx::query(insert_verification_sql)
+        if crate::db::is_sqlite() {
+            sqlx::query(
+                "insert into email_verifications (user_id, token_hash, expires_at) values ($1, $2, $3)",
+            )
             .bind(user_id.to_string())
             .bind(&token_hash)
             .bind(&expires_at_str)
             .execute(pool)
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
+        } else {
+            sqlx::query(
+                "insert into email_verifications (user_id, token_hash, expires_at) values ($1::uuid, $2, $3::timestamptz)",
+            )
+            .bind(user_id.to_string())
+            .bind(&token_hash)
+            .bind(&expires_at_str)
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+        }
 
         // Send verification email using the email service from state
         crate::email::send_verification_email(state.email.as_ref(), &email, &token)
@@ -652,7 +659,13 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
 
         // Look up user by email
         // sqlx::Any will automatically convert UUID columns to strings
-        let user = sqlx::query("select id, password_hash from users where email = $1")
+        let user_lookup_sql = if crate::db::is_sqlite() {
+            "select id, password_hash from users where email = $1"
+        } else {
+            "select CAST(id as TEXT) as id, password_hash from users where email = $1"
+        };
+
+        let user = sqlx::query(user_lookup_sql)
             .bind(&email)
             .fetch_optional(pool)
             .await
@@ -669,7 +682,6 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
                 let token = crate::email::generate_token();
                 let token_hash = crate::email::hash_token(&token);
 
-                // Calculate expiration as ISO 8601 string
                 let expires_at = time::OffsetDateTime::now_utc() + time::Duration::hours(1);
                 let expires_at_str = expires_at
                     .format(&time::format_description::well_known::Rfc3339)
@@ -679,26 +691,37 @@ pub async fn request_password_reset(email: String) -> Result<(), ServerFnError> 
                     })
                     .ok();
 
-                if let Some(expires_str) = expires_at_str {
-                    // Store reset token
-                    if let Err(e) = sqlx::query(
-                        "insert into password_resets (user_id, token_hash, expires_at) values ($1, $2, $3)"
+                let insert_reset = if crate::db::is_sqlite() {
+                    expires_at_str.as_ref().map(|expires_str| {
+                        sqlx::query(
+                            "insert into password_resets (user_id, token_hash, expires_at) values ($1, $2, $3)",
+                        )
+                        .bind(&user_id_str)
+                        .bind(&token_hash)
+                        .bind(expires_str)
+                    })
+                } else {
+                    expires_at_str.map(|expires_str| {
+                        sqlx::query(
+                            "insert into password_resets (user_id, token_hash, expires_at) values ($1::uuid, $2, $3::timestamptz)",
+                        )
+                        .bind(&user_id_str)
+                        .bind(&token_hash)
+                        .bind(expires_str)
+                    })
+                };
+
+                if let Some(query) = insert_reset {
+                    if let Err(e) = query.execute(pool).await {
+                        tracing::warn!("auth.request_password_reset: store token failed: {}", e);
+                    } else if let Err(e) = crate::email::send_password_reset_email(
+                        state.email.as_ref(),
+                        &email,
+                        &token,
                     )
-                    .bind(&user_id_str)
-                    .bind(&token_hash)
-                    .bind(&expires_str)
-                    .execute(pool)
                     .await
                     {
-                        tracing::warn!("auth.request_password_reset: store token failed: {}", e);
-                    } else {
-                        // Send reset email using the email service from state (log errors but don't reveal to user)
-                        if let Err(e) = crate::email::send_password_reset_email(state.email.as_ref(), &email, &token).await {
-                            tracing::warn!(
-                                "auth.request_password_reset: send email failed: {}",
-                                e
-                            );
-                        }
+                        tracing::warn!("auth.request_password_reset: send email failed: {}", e);
                     }
                 }
             }

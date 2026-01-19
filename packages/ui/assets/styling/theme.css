@@ -162,6 +162,7 @@ a { color: inherit; }
   display: grid;
   gap: 10px;
   max-width: min(360px, 90vw);
+  pointer-events: none;
 }
 
 .toast {
@@ -174,7 +175,26 @@ a { color: inherit; }
   border: 1px solid var(--civic-border);
   background: rgba(16,24,40,0.96);
   box-shadow: var(--shadow);
-  animation: civic_in 200ms ease both;
+  animation: toast_in 180ms ease both, toast_out 240ms ease both 4.4s;
+  transform-origin: top right;
+  transform: translateY(calc(var(--toast-index, 0) * 6px))
+    scale(calc(1 - (var(--toast-index, 0) * 0.035)));
+  filter: brightness(calc(1 - (var(--toast-index, 0) * 0.06))) saturate(0.98);
+  z-index: calc(100 - var(--toast-index, 0));
+  pointer-events: auto;
+  transition: transform 200ms ease, filter 200ms ease, box-shadow 200ms ease;
+}
+
+.toast_region:hover .toast {
+  transform: translateY(calc(var(--toast-index, 0) * 4px))
+    scale(calc(1 - (var(--toast-index, 0) * 0.02)));
+  filter: brightness(1) saturate(1);
+}
+
+.toast:hover {
+  transform: translateY(0) scale(1.01);
+  box-shadow: 0 16px 32px rgba(4, 8, 16, 0.35);
+  animation-play-state: paused;
 }
 
 .toast_error {
@@ -202,6 +222,17 @@ a { color: inherit; }
   font-size: 0.95rem;
   line-height: 1.4;
   margin-top: 4px;
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  overflow: hidden;
+  transition: max-height 240ms ease, opacity 200ms ease, transform 200ms ease;
+}
+
+.toast:hover .toast_body {
+  max-height: 120px;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .toast_close {
@@ -215,6 +246,16 @@ a { color: inherit; }
 
 .toast_close:hover {
   color: var(--civic-text);
+}
+
+@keyframes toast_in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes toast_out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .account_menu {
