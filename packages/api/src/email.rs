@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use rand::Rng;
 use sha2::{Digest, Sha256};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 fn email_domain(email: &str) -> &str {
     email.split('@').nth(1).unwrap_or("invalid")
@@ -77,19 +77,53 @@ impl EmailService for SmtpEmailService {
             )?;
 
         let creds = Credentials::new(smtp_username, smtp_password);
-        let mailer = SmtpTransport::relay(&smtp_host)
-            .map_err(|e| anyhow::anyhow!("SMTP relay init failed: {}", e))?
-            .port(smtp_port)
-            .credentials(creds)
-            .build();
+        let mut ports = vec![smtp_port, 465, 587, 25];
+        ports.retain({
+            let mut seen = std::collections::HashSet::new();
+            move |port| seen.insert(*port)
+        });
 
-        // Wrap blocking SMTP operation in spawn_blocking
-        tokio::task::spawn_blocking(move || mailer.send(&email))
+        let email = std::sync::Arc::new(email);
+
+        let mut last_err: Option<anyhow::Error> = None;
+        for port in ports {
+            let mailer = match port {
+                465 => {
+                    debug!("email.smtp.transport: tls=wrapper port=465");
+                    SmtpTransport::relay(&smtp_host)
+                        .map_err(|e| anyhow::anyhow!("SMTP relay init failed: {}", e))?
+                        .port(port)
+                        .credentials(creds.clone())
+                        .build()
+                }
+                _ => {
+                    debug!("email.smtp.transport: tls=starttls port={}", port);
+                    SmtpTransport::starttls_relay(&smtp_host)
+                        .map_err(|e| anyhow::anyhow!("SMTP starttls init failed: {}", e))?
+                        .port(port)
+                        .credentials(creds.clone())
+                        .build()
+                }
+            };
+
+            let send_result = tokio::task::spawn_blocking({
+                let email = std::sync::Arc::clone(&email);
+                move || mailer.send(&email)
+            })
             .await
             .map_err(|e| anyhow::anyhow!("SMTP send task join error: {}", e))?
-            .map_err(|e| anyhow::anyhow!("SMTP send failed: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("SMTP send failed: {}", e));
 
-        Ok(())
+            match send_result {
+                Ok(_) => return Ok(()),
+                Err(err) => {
+                    warn!("email.smtp.send_email: failed on port {}: {}", port, err);
+                    last_err = Some(err);
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("SMTP send failed")))
     }
 }
 
