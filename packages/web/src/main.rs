@@ -4,7 +4,7 @@ use std::env;
 use views::{
     AuthCallback, AuthResetConfirm, AuthResetPassword, AuthSignIn, AuthSignUp, AuthVerify, Blog,
     Home, Me, ProfileEdit, ProgramDetail, ProgramNew, Programs, ProposalDetail, ProposalNew,
-    Proposals,
+    Proposals, VideoDetail, Videos,
 };
 
 mod views;
@@ -45,6 +45,10 @@ enum Route {
     ProgramNew {},
     #[route("/programs/:id")]
     ProgramDetail { id: String },
+    #[route("/videos")]
+    Videos {},
+    #[route("/videos/:id")]
+    VideoDetail { id: String },
 }
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
