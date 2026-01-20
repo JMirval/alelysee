@@ -4,6 +4,40 @@ use api::types::{ContentTargetType, Video};
 const VIDEO_FEED_CSS: Asset = asset!("/assets/styling/video_feed.css");
 
 #[component]
+fn VideoFeedItem(video: Video, is_active: bool) -> Element {
+    let cfg = use_resource(|| async move { api::public_config().await });
+
+    rsx! {
+        div { class: "video-feed-item",
+            match cfg() {
+                None => rsx! { p { class: "hint", "Loading player..." } },
+                Some(Err(_)) => rsx! { p { class: "hint", "Player not configured." } },
+                Some(Ok(cfg)) => {
+                    let src = cfg.media_base_url.as_ref().map(|base| {
+                        format!("{}/{}", base.trim_end_matches('/'), video.storage_key)
+                    });
+
+                    rsx! {
+                        if let Some(src) = src {
+                            video {
+                                class: "video-feed-player",
+                                src: "{src}",
+                                muted: false,
+                                autoplay: is_active,
+                                playsinline: true,
+                                preload: "auto",
+                            }
+                        } else {
+                            p { class: "hint", "Set MEDIA_BASE_URL to enable playback." }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
 pub fn VideoFeed(
     starting_video_id: Option<String>,
     filter_target_type: Option<ContentTargetType>,
@@ -60,10 +94,10 @@ pub fn VideoFeed(
             } else {
                 div { class: "video-feed-scroll",
                     for (idx, video) in videos().iter().enumerate() {
-                        div {
+                        VideoFeedItem {
                             key: "{video.id}",
-                            class: "video-feed-item",
-                            "Video {idx}: {video.id}"
+                            video: video.clone(),
+                            is_active: idx == current_index(),
                         }
                     }
                 }
