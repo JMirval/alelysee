@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 use api::types::{ContentTargetType, Video};
 
+const VIDEO_FEED_CSS: Asset = asset!("/assets/styling/video_feed.css");
+
 #[component]
 pub fn VideoFeed(
     starting_video_id: Option<String>,
@@ -46,6 +48,8 @@ pub fn VideoFeed(
     });
 
     rsx! {
+        document::Link { rel: "stylesheet", href: VIDEO_FEED_CSS }
+
         div { class: "video-feed-container",
             if loading() {
                 p { "Loading videos..." }

@@ -1,0 +1,44 @@
+/* Video Feed Container */
+.video-feed-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    overflow: hidden;
+    z-index: 1000;
+}
+
+.video-feed-scroll {
+    width: 100%;
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+
+.video-feed-item {
+    width: 100%;
+    height: 100vh;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Video player */
+.video-feed-player {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Loading states */
+.video-feed-container .error {
+    color: white;
+    text-align: center;
+    padding: 20px;
+}
