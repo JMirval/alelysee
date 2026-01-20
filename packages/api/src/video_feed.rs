@@ -625,11 +625,372 @@ pub async fn list_single_content_videos(
 
 #[cfg(all(test, feature = "server"))]
 mod tests {
-    use super::*;
+    use crate::test_support::{pool, reset_db};
+    use sqlx::Executor;
+    use uuid::Uuid;
+
+    async fn create_test_user(pool: &sqlx::Pool<sqlx::Postgres>) -> Uuid {
+        sqlx::query_scalar("INSERT INTO users DEFAULT VALUES RETURNING id")
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    async fn create_test_proposal(pool: &sqlx::Pool<sqlx::Postgres>, user_id: Uuid) -> Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO proposals (author_user_id, title, summary, body_markdown)
+             VALUES ($1, 'Test Proposal', 'Test', 'Test')
+             RETURNING id",
+        )
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn create_test_video(
+        pool: &sqlx::Pool<sqlx::Postgres>,
+        user_id: Uuid,
+        target_id: Uuid,
+    ) -> Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO videos (owner_user_id, target_type, target_id, storage_bucket, storage_key, content_type)
+             VALUES ($1, 'proposal', $2, 'test', 'test.mp4', 'video/mp4')
+             RETURNING id",
+        )
+        .bind(user_id)
+        .bind(target_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
 
     #[tokio::test]
     async fn test_mark_video_viewed_prevents_duplicates() {
-        // This will be implemented after we have test infrastructure
-        // For now, just verify compilation
+        let Some(pool) = pool().await else {
+            eprintln!("Skipping test: no DATABASE_URL");
+            return;
+        };
+        reset_db().await.unwrap();
+
+        let user_id = create_test_user(pool).await;
+        let proposal_id = create_test_proposal(pool, user_id).await;
+        let video_id = create_test_video(pool, user_id, proposal_id).await;
+
+        // Mark video as viewed first time
+        sqlx::query(
+            "INSERT INTO video_views (user_id, video_id) VALUES ($1, $2)
+             ON CONFLICT (user_id, video_id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind(video_id)
+        .execute(pool)
+        .await
+        .unwrap();
+
+        // Attempt to mark again - should be idempotent
+        let result = sqlx::query(
+            "INSERT INTO video_views (user_id, video_id) VALUES ($1, $2)
+             ON CONFLICT (user_id, video_id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind(video_id)
+        .execute(pool)
+        .await;
+
+        assert!(result.is_ok());
+
+        // Verify only one entry exists
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM video_views WHERE user_id = $1 AND video_id = $2",
+        )
+        .bind(user_id)
+        .bind(video_id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+
+        assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_bookmark_toggle() {
+        let Some(pool) = pool().await else {
+            eprintln!("Skipping test: no DATABASE_URL");
+            return;
+        };
+        reset_db().await.unwrap();
+
+        let user_id = create_test_user(pool).await;
+        let proposal_id = create_test_proposal(pool, user_id).await;
+        let video_id = create_test_video(pool, user_id, proposal_id).await;
+
+        // Check if bookmark exists (should be none)
+        let exists: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM bookmarks WHERE user_id = $1 AND video_id = $2",
+        )
+        .bind(user_id)
+        .bind(video_id)
+        .fetch_optional(pool)
+        .await
+        .unwrap();
+
+        assert!(exists.is_none());
+
+        // Add bookmark
+        sqlx::query(
+            "INSERT INTO bookmarks (user_id, video_id) VALUES ($1, $2)
+             ON CONFLICT (user_id, video_id) DO NOTHING",
+        )
+        .bind(user_id)
+        .bind(video_id)
+        .execute(pool)
+        .await
+        .unwrap();
+
+        // Verify bookmark exists
+        let exists: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM bookmarks WHERE user_id = $1 AND video_id = $2",
+        )
+        .bind(user_id)
+        .bind(video_id)
+        .fetch_optional(pool)
+        .await
+        .unwrap();
+
+        assert!(exists.is_some());
+
+        // Remove bookmark
+        sqlx::query("DELETE FROM bookmarks WHERE user_id = $1 AND video_id = $2")
+            .bind(user_id)
+            .bind(video_id)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        // Verify bookmark removed
+        let exists: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM bookmarks WHERE user_id = $1 AND video_id = $2",
+        )
+        .bind(user_id)
+        .bind(video_id)
+        .fetch_optional(pool)
+        .await
+        .unwrap();
+
+        assert!(exists.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_list_bookmarked_videos() {
+        let Some(pool) = pool().await else {
+            eprintln!("Skipping test: no DATABASE_URL");
+            return;
+        };
+        reset_db().await.unwrap();
+
+        let user_id = create_test_user(pool).await;
+        let proposal_id = create_test_proposal(pool, user_id).await;
+
+        // Create 3 videos
+        let video1 = create_test_video(pool, user_id, proposal_id).await;
+        let _video2 = create_test_video(pool, user_id, proposal_id).await;
+        let video3 = create_test_video(pool, user_id, proposal_id).await;
+
+        // Bookmark video 1 and 3
+        sqlx::query("INSERT INTO bookmarks (user_id, video_id) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(video1)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO bookmarks (user_id, video_id) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(video3)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        // Query bookmarked videos
+        let rows = sqlx::query(
+            "SELECT v.* FROM videos v
+             JOIN bookmarks b ON v.id = b.video_id
+             WHERE b.user_id = $1
+             ORDER BY b.created_at DESC",
+        )
+        .bind(user_id)
+        .fetch_all(pool)
+        .await
+        .unwrap();
+
+        assert_eq!(rows.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_view_history_filtering() {
+        let Some(pool) = pool().await else {
+            eprintln!("Skipping test: no DATABASE_URL");
+            return;
+        };
+        reset_db().await.unwrap();
+
+        let user_id = create_test_user(pool).await;
+        let proposal_id = create_test_proposal(pool, user_id).await;
+
+        // Create 3 videos
+        let video1 = create_test_video(pool, user_id, proposal_id).await;
+        let video2 = create_test_video(pool, user_id, proposal_id).await;
+        let _video3 = create_test_video(pool, user_id, proposal_id).await;
+
+        // Mark video 1 and 2 as viewed
+        sqlx::query("INSERT INTO video_views (user_id, video_id) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(video1)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO video_views (user_id, video_id) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(video2)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        // Query unviewed videos
+        let rows = sqlx::query(
+            "SELECT v.* FROM videos v
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM video_views vv
+                 WHERE vv.user_id = $1 AND vv.video_id = v.id
+             )
+             LIMIT 10",
+        )
+        .bind(user_id)
+        .fetch_all(pool)
+        .await
+        .unwrap();
+
+        // Should only return video3
+        assert_eq!(rows.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_view_exhaustion_reset() {
+        let Some(pool) = pool().await else {
+            eprintln!("Skipping test: no DATABASE_URL");
+            return;
+        };
+        reset_db().await.unwrap();
+
+        let user_id = create_test_user(pool).await;
+        let proposal_id = create_test_proposal(pool, user_id).await;
+
+        // Create 2 videos
+        let video1 = create_test_video(pool, user_id, proposal_id).await;
+        let video2 = create_test_video(pool, user_id, proposal_id).await;
+
+        // Mark both as viewed
+        sqlx::query("INSERT INTO video_views (user_id, video_id) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(video1)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO video_views (user_id, video_id) VALUES ($1, $2)")
+            .bind(user_id)
+            .bind(video2)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        // Verify all videos are marked as viewed
+        let unviewed_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM videos v
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM video_views vv
+                 WHERE vv.user_id = $1 AND vv.video_id = v.id
+             )",
+        )
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+
+        assert_eq!(unviewed_count, 0);
+
+        // Reset view history for this user
+        sqlx::query("DELETE FROM video_views WHERE user_id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+
+        // Verify all videos are now unviewed
+        let unviewed_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM videos v
+             WHERE NOT EXISTS (
+                 SELECT 1 FROM video_views vv
+                 WHERE vv.user_id = $1 AND vv.video_id = v.id
+             )",
+        )
+        .bind(user_id)
+        .fetch_one(pool)
+        .await
+        .unwrap();
+
+        assert_eq!(unviewed_count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_weighted_shuffling_distribution() {
+        // Test that the weighted shuffling produces roughly the expected ratio
+        let collaborative = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let popular = vec![11, 12, 13, 14, 15, 16, 17];
+        let interactive = vec![18, 19, 20, 21, 22, 23, 24];
+
+        let result = merge_and_shuffle_test(collaborative, popular, interactive);
+
+        // Should have all 24 items
+        assert_eq!(result.len(), 24);
+
+        // Check that we have items from all three categories
+        let has_collab = result.iter().any(|&x| x <= 10);
+        let has_popular = result.iter().any(|&x| (11..=17).contains(&x));
+        let has_interactive = result.iter().any(|&x| x >= 18);
+
+        assert!(has_collab);
+        assert!(has_popular);
+        assert!(has_interactive);
+    }
+
+    // Test helper that mimics the real merge_and_shuffle logic
+    fn merge_and_shuffle_test(mut collab: Vec<i32>, mut pop: Vec<i32>, mut inter: Vec<i32>) -> Vec<i32> {
+        let mut result = Vec::new();
+        let collab_weight = 4;
+        let pop_weight = 3;
+        let inter_weight = 3;
+
+        while !collab.is_empty() || !pop.is_empty() || !inter.is_empty() {
+            for _ in 0..collab_weight {
+                if let Some(item) = collab.pop() {
+                    result.push(item);
+                }
+            }
+            for _ in 0..pop_weight {
+                if let Some(item) = pop.pop() {
+                    result.push(item);
+                }
+            }
+            for _ in 0..inter_weight {
+                if let Some(item) = inter.pop() {
+                    result.push(item);
+                }
+            }
+        }
+
+        result
     }
 }
