@@ -114,6 +114,57 @@ fn VideoOverlay(video_id: String, initial_vote_score: i64) -> Element {
 }
 
 #[component]
+fn VideoMetadata(video: Video) -> Element {
+    // Load proposal/program info
+    let mut content_title = use_signal(|| String::from("Loading..."));
+    let author_name = use_signal(|| String::from(""));
+
+    let target_id = video.target_id.to_string();
+    use_effect(move || {
+        let target_type = video.target_type;
+        let tid = target_id.clone();
+
+        spawn(async move {
+            match target_type {
+                ContentTargetType::Proposal => {
+                    if let Ok(proposal) = api::get_proposal(tid).await {
+                        content_title.set(proposal.title);
+                        // TODO: Load author name from proposal.author_user_id
+                    }
+                }
+                ContentTargetType::Program => {
+                    if let Ok(program_detail) = api::get_program(tid).await {
+                        content_title.set(program_detail.program.title);
+                        // TODO: Load author name from program_detail.program.author_user_id
+                    }
+                }
+                _ => {}
+            }
+        });
+    });
+
+    rsx! {
+        div { class: "video-metadata",
+            h3 { class: "metadata-title", "{content_title()}" }
+            p { class: "metadata-author", "By {author_name()}" }
+            a {
+                class: "metadata-link",
+                href: match video.target_type {
+                    ContentTargetType::Proposal => format!("/proposals/{}", video.target_id),
+                    ContentTargetType::Program => format!("/programs/{}", video.target_id),
+                    _ => "#".to_string(),
+                },
+                {match video.target_type {
+                    ContentTargetType::Proposal => "View full proposal",
+                    ContentTargetType::Program => "View full program",
+                    _ => "View content",
+                }}
+            }
+        }
+    }
+}
+
+#[component]
 fn VideoFeedItem(video: Video, is_active: bool) -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
@@ -167,6 +218,10 @@ fn VideoFeedItem(video: Video, is_active: bool) -> Element {
             VideoOverlay {
                 video_id: video.id.to_string(),
                 initial_vote_score: video.vote_score,
+            }
+
+            VideoMetadata {
+                video: video.clone(),
             }
         }
     }
