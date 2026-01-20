@@ -224,14 +224,19 @@ pub async fn list_feed_videos(
         // Phase 3: Get interactive videos (30% weight)
         let interactive_videos = get_interactive_videos(user_id, pool).await?;
 
-        // TODO: Phase 4: Merge and shuffle with weights
-        // TODO: Phase 5: Apply pagination
+        // Phase 4: Merge and shuffle with weights
+        let feed = merge_and_shuffle(collaborative_videos, popular_videos, interactive_videos);
 
-        // For now, just return combined results
-        let mut combined = collaborative_videos;
-        combined.extend(popular_videos);
-        combined.extend(interactive_videos);
-        Ok(combined)
+        // TODO: Phase 5: Check if feed is empty and reset views
+
+        // Phase 6: Apply pagination
+        let total = feed.len();
+        let start = offset.min(total as i64) as usize;
+        let end = (offset + limit).min(total as i64) as usize;
+        let paginated_feed = feed[start..end].to_vec();
+
+        debug!("video_feed.list_feed_videos: total={} returning={}", total, paginated_feed.len());
+        Ok(paginated_feed)
     }
 }
 
@@ -414,6 +419,83 @@ async fn get_interactive_videos(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     parse_video_rows(rows)
+}
+
+#[cfg(feature = "server")]
+fn merge_and_shuffle(
+    collaborative: Vec<Video>,
+    popular: Vec<Video>,
+    interactive: Vec<Video>,
+) -> Vec<Video> {
+    use std::collections::HashSet;
+    use uuid::Uuid;
+
+    let mut result = Vec::new();
+    let mut seen_ids: HashSet<Uuid> = HashSet::new();
+
+    // Add videos with weighted sampling: 40% collaborative, 30% popular, 30% interactive
+    let mut collab_idx = 0;
+    let mut popular_idx = 0;
+    let mut interactive_idx = 0;
+
+    // Simple weighted round-robin: 4 collab, 3 popular, 3 interactive, repeat
+    let pattern = vec![0, 0, 0, 0, 1, 1, 1, 2, 2, 2]; // 4:3:3 ratio
+
+    let mut pattern_idx = 0;
+    let max_iterations = collaborative.len() + popular.len() + interactive.len();
+
+    for _ in 0..max_iterations {
+        let source = pattern[pattern_idx % pattern.len()];
+        pattern_idx += 1;
+
+        let video = match source {
+            0 => {
+                if collab_idx < collaborative.len() {
+                    let v = &collaborative[collab_idx];
+                    collab_idx += 1;
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            }
+            1 => {
+                if popular_idx < popular.len() {
+                    let v = &popular[popular_idx];
+                    popular_idx += 1;
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            }
+            2 => {
+                if interactive_idx < interactive.len() {
+                    let v = &interactive[interactive_idx];
+                    interactive_idx += 1;
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        if let Some(v) = video {
+            if !seen_ids.contains(&v.id) {
+                seen_ids.insert(v.id);
+                result.push(v);
+            }
+        }
+
+        // Break if all sources exhausted
+        if collab_idx >= collaborative.len()
+            && popular_idx >= popular.len()
+            && interactive_idx >= interactive.len()
+        {
+            break;
+        }
+    }
+
+    result
 }
 
 #[cfg(feature = "server")]
