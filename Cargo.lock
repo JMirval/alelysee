@@ -6937,6 +6937,7 @@ version = "0.1.0"
 dependencies = [
  "api",
  "dioxus",
+ "gloo-timers",
  "urlencoding",
  "web-sys",
 ]
