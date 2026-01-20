@@ -245,6 +245,7 @@ fn WebNavbar() -> Element {
                         {ui::t(lang, "nav.proposals")}
                     }
                     Link { class: "nav_link", to: Route::Programs {}, {ui::t(lang, "nav.programs")} }
+                    Link { class: "nav_link", to: Route::Videos {}, "Videos" }
                     ui::AccountMenu {}
                 }
             }
