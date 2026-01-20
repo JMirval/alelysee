@@ -33,6 +33,9 @@ pub use profile::{ActivityFeed, ProfileEditPage};
 mod videos;
 pub use videos::VideoSection;
 
+mod video_feed;
+pub use video_feed::VideoFeed;
+
 mod theme;
 pub use theme::CivicTheme;
 
