@@ -23,6 +23,7 @@ mod profile;
 mod programs;
 mod proposals;
 mod uploads;
+mod video_feed;
 mod votes;
 
 #[cfg(all(test, feature = "server"))]
