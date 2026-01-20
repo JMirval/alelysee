@@ -4,7 +4,7 @@ use api::types::{ContentTargetType, Video};
 const VIDEO_FEED_CSS: Asset = asset!("/assets/styling/video_feed.css");
 
 #[component]
-fn VideoOverlay(video_id: String, initial_vote_score: i64) -> Element {
+fn VideoOverlay(video_id: String, initial_vote_score: i64, on_comment_click: EventHandler<()>) -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
 
@@ -103,9 +103,10 @@ fn VideoOverlay(video_id: String, initial_vote_score: i64) -> Element {
                 div { class: "btn-icon", if is_bookmarked() { "🔖" } else { "🔖" } }
             }
 
-            // Comment button (TODO: open panel)
+            // Comment button
             button {
                 class: "overlay-btn",
+                onclick: move |_| on_comment_click.call(()),
                 div { class: "btn-icon", "💬" }
                 div { class: "btn-count", "{comment_count()}" }
             }
@@ -165,12 +166,44 @@ fn VideoMetadata(video: Video) -> Element {
 }
 
 #[component]
+fn CommentPanel(video_id: String, is_open: Signal<bool>) -> Element {
+    let on_close = move |_| {
+        is_open.set(false);
+    };
+
+    let on_backdrop_click = move |_| {
+        is_open.set(false);
+    };
+
+    if !is_open() {
+        return rsx! {};
+    }
+
+    rsx! {
+        div { class: "comment-panel-backdrop", onclick: on_backdrop_click }
+        div { class: if is_open() { "comment-panel open" } else { "comment-panel" },
+            div { class: "comment-panel-header",
+                h3 { "Comments" }
+                button { class: "close-btn", onclick: on_close, "✕" }
+            }
+            div { class: "comment-panel-content",
+                crate::CommentThread {
+                    target_type: ContentTargetType::Video,
+                    target_id: video_id,
+                }
+            }
+        }
+    }
+}
+
+#[component]
 fn VideoFeedItem(video: Video, is_active: bool) -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
     let cfg = use_resource(|| async move { api::public_config().await });
 
     let mut view_tracked = use_signal(|| false);
+    let mut comment_panel_open = use_signal(|| false);
 
     // Track view after 2 seconds of being active
     use_effect(move || {
@@ -218,10 +251,16 @@ fn VideoFeedItem(video: Video, is_active: bool) -> Element {
             VideoOverlay {
                 video_id: video.id.to_string(),
                 initial_vote_score: video.vote_score,
+                on_comment_click: move |_| comment_panel_open.set(true),
             }
 
             VideoMetadata {
                 video: video.clone(),
+            }
+
+            CommentPanel {
+                video_id: video.id.to_string(),
+                is_open: comment_panel_open,
             }
         }
     }
