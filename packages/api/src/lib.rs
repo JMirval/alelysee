@@ -124,4 +124,5 @@ pub use programs::ProgramDetail;
 pub use programs::{add_program_item, create_program, get_program, list_programs, update_program};
 pub use proposals::{create_proposal, get_proposal, list_proposals, update_proposal};
 pub use uploads::{create_video_upload_intent, finalize_video_upload, list_videos};
+pub use video_feed::mark_video_viewed;
 pub use votes::{get_vote_state, set_vote};

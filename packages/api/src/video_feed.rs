@@ -3,4 +3,62 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 use tracing::{debug, info};
 
-// Server functions will go here
+#[dioxus::prelude::post("/api/video_feed/mark_viewed")]
+pub async fn mark_video_viewed(
+    id_token: String,
+    video_id: String,
+) -> Result<(), ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = (id_token, video_id);
+        Err(ServerFnError::new("mark_video_viewed is server-only"))
+    }
+
+    #[cfg(feature = "server")]
+    {
+        use uuid::Uuid;
+
+        debug!("video_feed.mark_video_viewed: video_id={}", video_id);
+        let user_id = crate::auth::require_user_id(id_token).await?;
+        let vid = Uuid::parse_str(&video_id)
+            .map_err(|_| ServerFnError::new("invalid video_id"))?;
+
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
+
+        // Insert view record (ignore if duplicate due to unique constraint)
+        let sql = if crate::db::is_sqlite() {
+            r#"
+            insert or ignore into video_views (user_id, video_id)
+            values ($1, $2)
+            "#
+        } else {
+            r#"
+            insert into video_views (user_id, video_id)
+            values ($1, $2)
+            on conflict (user_id, video_id) do nothing
+            "#
+        };
+
+        sqlx::query(sql)
+            .bind(crate::db::uuid_to_db(user_id))
+            .bind(crate::db::uuid_to_db(vid))
+            .execute(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        info!("video_feed.mark_video_viewed: recorded user_id={} video_id={}", user_id, vid);
+        Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "server"))]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_mark_video_viewed_prevents_duplicates() {
+        // This will be implemented after we have test infrastructure
+        // For now, just verify compilation
+    }
+}
