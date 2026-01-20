@@ -52,6 +52,65 @@ pub async fn mark_video_viewed(
     }
 }
 
+#[dioxus::prelude::post("/api/video_feed/bookmark")]
+pub async fn bookmark_video(
+    id_token: String,
+    video_id: String,
+) -> Result<bool, ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = (id_token, video_id);
+        Err(ServerFnError::new("bookmark_video is server-only"))
+    }
+
+    #[cfg(feature = "server")]
+    {
+        use sqlx::Row;
+        use uuid::Uuid;
+
+        debug!("video_feed.bookmark_video: video_id={}", video_id);
+        let user_id = crate::auth::require_user_id(id_token).await?;
+        let vid = Uuid::parse_str(&video_id)
+            .map_err(|_| ServerFnError::new("invalid video_id"))?;
+
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
+
+        // Check if bookmark exists
+        let exists = sqlx::query(
+            "select 1 from bookmarks where user_id = $1 and video_id = $2"
+        )
+        .bind(crate::db::uuid_to_db(user_id))
+        .bind(crate::db::uuid_to_db(vid))
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?
+        .is_some();
+
+        if exists {
+            // Remove bookmark
+            sqlx::query("delete from bookmarks where user_id = $1 and video_id = $2")
+                .bind(crate::db::uuid_to_db(user_id))
+                .bind(crate::db::uuid_to_db(vid))
+                .execute(pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            info!("video_feed.bookmark_video: removed bookmark user_id={} video_id={}", user_id, vid);
+            Ok(false)
+        } else {
+            // Add bookmark
+            sqlx::query("insert into bookmarks (user_id, video_id) values ($1, $2)")
+                .bind(crate::db::uuid_to_db(user_id))
+                .bind(crate::db::uuid_to_db(vid))
+                .execute(pool)
+                .await
+                .map_err(|e| ServerFnError::new(e.to_string()))?;
+            info!("video_feed.bookmark_video: added bookmark user_id={} video_id={}", user_id, vid);
+            Ok(true)
+        }
+    }
+}
+
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
