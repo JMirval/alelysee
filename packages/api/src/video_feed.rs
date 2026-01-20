@@ -218,13 +218,17 @@ pub async fn list_feed_videos(
         // Phase 1: Get collaborative filtering videos (40% weight)
         let collaborative_videos = get_collaborative_videos(user_id, pool).await?;
 
-        // TODO: Phase 2: Get popular videos (30% weight)
+        // Phase 2: Get popular videos (30% weight)
+        let popular_videos = get_popular_videos(user_id, pool).await?;
+
         // TODO: Phase 3: Get interactive videos (30% weight)
         // TODO: Phase 4: Merge and shuffle with weights
         // TODO: Phase 5: Apply pagination
 
-        // For now, just return collaborative videos
-        Ok(collaborative_videos)
+        // For now, just return combined results
+        let mut combined = collaborative_videos;
+        combined.extend(popular_videos);
+        Ok(combined)
     }
 }
 
@@ -271,6 +275,71 @@ async fn get_collaborative_videos(
     .fetch_all(pool)
     .await
     .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    parse_video_rows(rows)
+}
+
+#[cfg(feature = "server")]
+async fn get_popular_videos(
+    user_id: uuid::Uuid,
+    pool: &sqlx::Pool<sqlx::Any>,
+) -> Result<Vec<Video>, ServerFnError> {
+    use sqlx::Row;
+
+    // Videos with highest vote scores in past 7 days
+    let sql = if crate::db::is_sqlite() {
+        r#"
+        select
+            CAST(v.id as TEXT) as id,
+            CAST(v.owner_user_id as TEXT) as owner_user_id,
+            v.target_type,
+            CAST(v.target_id as TEXT) as target_id,
+            v.storage_bucket,
+            v.storage_key,
+            v.content_type,
+            v.duration_seconds,
+            CAST(v.created_at as TEXT) as created_at,
+            coalesce(sum(vo.value), 0) as vote_score
+        from videos v
+        left join votes vo on vo.target_type = 'video' and vo.target_id = v.id
+        where v.created_at > datetime('now', '-7 days')
+            and v.id not in (
+                select video_id from video_views where user_id = $1
+            )
+        group by v.id
+        order by vote_score desc
+        limit 15
+        "#
+    } else {
+        r#"
+        select
+            CAST(v.id as TEXT) as id,
+            CAST(v.owner_user_id as TEXT) as owner_user_id,
+            v.target_type,
+            CAST(v.target_id as TEXT) as target_id,
+            v.storage_bucket,
+            v.storage_key,
+            v.content_type,
+            v.duration_seconds,
+            CAST(v.created_at as TEXT) as created_at,
+            coalesce(sum(vo.value), 0) as vote_score
+        from videos v
+        left join votes vo on vo.target_type = 'video' and vo.target_id = v.id
+        where v.created_at > now() - interval '7 days'
+            and v.id not in (
+                select video_id from video_views where user_id = $1
+            )
+        group by v.id
+        order by vote_score desc
+        limit 15
+        "#
+    };
+
+    let rows = sqlx::query(sql)
+        .bind(crate::db::uuid_to_db(user_id))
+        .fetch_all(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
 
     parse_video_rows(rows)
 }
