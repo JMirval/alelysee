@@ -559,6 +559,70 @@ fn parse_video_rows(rows: Vec<sqlx::any::AnyRow>) -> Result<Vec<Video>, ServerFn
     Ok(videos)
 }
 
+#[dioxus::prelude::post("/api/video_feed/list_single_content")]
+pub async fn list_single_content_videos(
+    target_type: ContentTargetType,
+    target_id: String,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Video>, ServerFnError> {
+    #[cfg(not(feature = "server"))]
+    {
+        let _ = (target_type, target_id, limit, offset);
+        Err(ServerFnError::new("list_single_content_videos is server-only"))
+    }
+
+    #[cfg(feature = "server")]
+    {
+        use sqlx::Row;
+        use uuid::Uuid;
+
+        debug!(
+            "video_feed.list_single_content_videos: target_type={:?} target_id={} limit={} offset={}",
+            target_type, target_id, limit, offset
+        );
+
+        let tid = Uuid::parse_str(&target_id)
+            .map_err(|_| ServerFnError::new("invalid target_id"))?;
+
+        let state = crate::state::AppState::global();
+        let pool = state.db.pool().await;
+
+        let rows = sqlx::query(
+            r#"
+            select
+                CAST(v.id as TEXT) as id,
+                CAST(v.owner_user_id as TEXT) as owner_user_id,
+                v.target_type,
+                CAST(v.target_id as TEXT) as target_id,
+                v.storage_bucket,
+                v.storage_key,
+                v.content_type,
+                v.duration_seconds,
+                CAST(v.created_at as TEXT) as created_at,
+                coalesce(sum(vo.value), 0) as vote_score
+            from videos v
+            left join votes vo on vo.target_type = 'video' and vo.target_id = v.id
+            where v.target_type = $1 and v.target_id = $2
+            group by v.id
+            order by v.created_at desc
+            limit $3 offset $4
+            "#,
+        )
+        .bind(target_type.as_db())
+        .bind(crate::db::uuid_to_db(tid))
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+        let videos = parse_video_rows(rows)?;
+        debug!("video_feed.list_single_content_videos: count={}", videos.len());
+        Ok(videos)
+    }
+}
+
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
