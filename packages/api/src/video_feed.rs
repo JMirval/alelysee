@@ -1,13 +1,12 @@
 use crate::types::{ContentTargetType, Video};
 use dioxus::prelude::*;
 #[cfg(feature = "server")]
+use sqlx::Row;
+#[cfg(feature = "server")]
 use tracing::{debug, info};
 
 #[dioxus::prelude::post("/api/video_feed/mark_viewed")]
-pub async fn mark_video_viewed(
-    id_token: String,
-    video_id: String,
-) -> Result<(), ServerFnError> {
+pub async fn mark_video_viewed(id_token: String, video_id: String) -> Result<(), ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
         let _ = (id_token, video_id);
@@ -20,8 +19,7 @@ pub async fn mark_video_viewed(
 
         debug!("video_feed.mark_video_viewed: video_id={}", video_id);
         let user_id = crate::auth::require_user_id(id_token).await?;
-        let vid = Uuid::parse_str(&video_id)
-            .map_err(|_| ServerFnError::new("invalid video_id"))?;
+        let vid = Uuid::parse_str(&video_id).map_err(|_| ServerFnError::new("invalid video_id"))?;
 
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
@@ -47,16 +45,16 @@ pub async fn mark_video_viewed(
             .await
             .map_err(|e| ServerFnError::new(e.to_string()))?;
 
-        info!("video_feed.mark_video_viewed: recorded user_id={} video_id={}", user_id, vid);
+        info!(
+            "video_feed.mark_video_viewed: recorded user_id={} video_id={}",
+            user_id, vid
+        );
         Ok(())
     }
 }
 
 #[dioxus::prelude::post("/api/video_feed/bookmark")]
-pub async fn bookmark_video(
-    id_token: String,
-    video_id: String,
-) -> Result<bool, ServerFnError> {
+pub async fn bookmark_video(id_token: String, video_id: String) -> Result<bool, ServerFnError> {
     #[cfg(not(feature = "server"))]
     {
         let _ = (id_token, video_id);
@@ -65,27 +63,23 @@ pub async fn bookmark_video(
 
     #[cfg(feature = "server")]
     {
-        use sqlx::Row;
         use uuid::Uuid;
 
         debug!("video_feed.bookmark_video: video_id={}", video_id);
         let user_id = crate::auth::require_user_id(id_token).await?;
-        let vid = Uuid::parse_str(&video_id)
-            .map_err(|_| ServerFnError::new("invalid video_id"))?;
+        let vid = Uuid::parse_str(&video_id).map_err(|_| ServerFnError::new("invalid video_id"))?;
 
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
 
         // Check if bookmark exists
-        let exists = sqlx::query(
-            "select 1 from bookmarks where user_id = $1 and video_id = $2"
-        )
-        .bind(crate::db::uuid_to_db(user_id))
-        .bind(crate::db::uuid_to_db(vid))
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| ServerFnError::new(e.to_string()))?
-        .is_some();
+        let exists = sqlx::query("select 1 from bookmarks where user_id = $1 and video_id = $2")
+            .bind(crate::db::uuid_to_db(user_id))
+            .bind(crate::db::uuid_to_db(vid))
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| ServerFnError::new(e.to_string()))?
+            .is_some();
 
         if exists {
             // Remove bookmark
@@ -95,7 +89,10 @@ pub async fn bookmark_video(
                 .execute(pool)
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?;
-            info!("video_feed.bookmark_video: removed bookmark user_id={} video_id={}", user_id, vid);
+            info!(
+                "video_feed.bookmark_video: removed bookmark user_id={} video_id={}",
+                user_id, vid
+            );
             Ok(false)
         } else {
             // Add bookmark
@@ -105,7 +102,10 @@ pub async fn bookmark_video(
                 .execute(pool)
                 .await
                 .map_err(|e| ServerFnError::new(e.to_string()))?;
-            info!("video_feed.bookmark_video: added bookmark user_id={} video_id={}", user_id, vid);
+            info!(
+                "video_feed.bookmark_video: added bookmark user_id={} video_id={}",
+                user_id, vid
+            );
             Ok(true)
         }
     }
@@ -125,9 +125,10 @@ pub async fn list_bookmarked_videos(
 
     #[cfg(feature = "server")]
     {
-        use sqlx::Row;
-
-        debug!("video_feed.list_bookmarked_videos: limit={} offset={}", limit, offset);
+        debug!(
+            "video_feed.list_bookmarked_videos: limit={} offset={}",
+            limit, offset
+        );
         let user_id = crate::auth::require_user_id(id_token).await?;
 
         let state = crate::state::AppState::global();
@@ -209,7 +210,10 @@ pub async fn list_feed_videos(
 
     #[cfg(feature = "server")]
     {
-        debug!("video_feed.list_feed_videos: limit={} offset={}", limit, offset);
+        debug!(
+            "video_feed.list_feed_videos: limit={} offset={}",
+            limit, offset
+        );
         let user_id = crate::auth::require_user_id(id_token).await?;
 
         let state = crate::state::AppState::global();
@@ -245,7 +249,11 @@ pub async fn list_feed_videos(
         let end = (offset + limit).min(total as i64) as usize;
         let paginated_feed = feed[start..end].to_vec();
 
-        debug!("video_feed.list_feed_videos: total={} returning={}", total, paginated_feed.len());
+        debug!(
+            "video_feed.list_feed_videos: total={} returning={}",
+            total,
+            paginated_feed.len()
+        );
         Ok(paginated_feed)
     }
 }
@@ -255,8 +263,6 @@ async fn get_collaborative_videos(
     user_id: uuid::Uuid,
     pool: &sqlx::Pool<sqlx::Any>,
 ) -> Result<Vec<Video>, ServerFnError> {
-    use sqlx::Row;
-
     // Find videos liked by users who liked videos you liked
     let rows = sqlx::query(
         r#"
@@ -302,8 +308,6 @@ async fn get_popular_videos(
     user_id: uuid::Uuid,
     pool: &sqlx::Pool<sqlx::Any>,
 ) -> Result<Vec<Video>, ServerFnError> {
-    use sqlx::Row;
-
     // Videos with highest vote scores in past 7 days
     let sql = if crate::db::is_sqlite() {
         r#"
@@ -367,8 +371,6 @@ async fn get_interactive_videos(
     user_id: uuid::Uuid,
     pool: &sqlx::Pool<sqlx::Any>,
 ) -> Result<Vec<Video>, ServerFnError> {
-    use sqlx::Row;
-
     // Videos with most votes + comments (comments weighted 2x)
     let sql = if crate::db::is_sqlite() {
         r#"
@@ -451,12 +453,10 @@ fn merge_and_shuffle(
     // Simple weighted round-robin: 4 collab, 3 popular, 3 interactive, repeat
     let pattern = vec![0, 0, 0, 0, 1, 1, 1, 2, 2, 2]; // 4:3:3 ratio
 
-    let mut pattern_idx = 0;
     let max_iterations = collaborative.len() + popular.len() + interactive.len();
 
-    for _ in 0..max_iterations {
+    for (pattern_idx, _) in (0..max_iterations).enumerate() {
         let source = pattern[pattern_idx % pattern.len()];
-        pattern_idx += 1;
 
         let video = match source {
             0 => {
@@ -526,7 +526,6 @@ async fn reset_viewed_videos(
 
 #[cfg(feature = "server")]
 fn parse_video_rows(rows: Vec<sqlx::any::AnyRow>) -> Result<Vec<Video>, ServerFnError> {
-    use sqlx::Row;
     let mut videos = Vec::with_capacity(rows.len());
 
     for row in rows {
@@ -569,12 +568,13 @@ pub async fn list_single_content_videos(
     #[cfg(not(feature = "server"))]
     {
         let _ = (target_type, target_id, limit, offset);
-        Err(ServerFnError::new("list_single_content_videos is server-only"))
+        Err(ServerFnError::new(
+            "list_single_content_videos is server-only",
+        ))
     }
 
     #[cfg(feature = "server")]
     {
-        use sqlx::Row;
         use uuid::Uuid;
 
         debug!(
@@ -582,8 +582,8 @@ pub async fn list_single_content_videos(
             target_type, target_id, limit, offset
         );
 
-        let tid = Uuid::parse_str(&target_id)
-            .map_err(|_| ServerFnError::new("invalid target_id"))?;
+        let tid =
+            Uuid::parse_str(&target_id).map_err(|_| ServerFnError::new("invalid target_id"))?;
 
         let state = crate::state::AppState::global();
         let pool = state.db.pool().await;
@@ -618,7 +618,10 @@ pub async fn list_single_content_videos(
         .map_err(|e| ServerFnError::new(e.to_string()))?;
 
         let videos = parse_video_rows(rows)?;
-        debug!("video_feed.list_single_content_videos: count={}", videos.len());
+        debug!(
+            "video_feed.list_single_content_videos: count={}",
+            videos.len()
+        );
         Ok(videos)
     }
 }
@@ -626,7 +629,6 @@ pub async fn list_single_content_videos(
 #[cfg(all(test, feature = "server"))]
 mod tests {
     use crate::test_support::{pool, reset_db};
-    use sqlx::Executor;
     use uuid::Uuid;
 
     async fn create_test_user(pool: &sqlx::Pool<sqlx::Postgres>) -> Uuid {
@@ -726,14 +728,13 @@ mod tests {
         let video_id = create_test_video(pool, user_id, proposal_id).await;
 
         // Check if bookmark exists (should be none)
-        let exists: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM bookmarks WHERE user_id = $1 AND video_id = $2",
-        )
-        .bind(user_id)
-        .bind(video_id)
-        .fetch_optional(pool)
-        .await
-        .unwrap();
+        let exists: Option<Uuid> =
+            sqlx::query_scalar("SELECT id FROM bookmarks WHERE user_id = $1 AND video_id = $2")
+                .bind(user_id)
+                .bind(video_id)
+                .fetch_optional(pool)
+                .await
+                .unwrap();
 
         assert!(exists.is_none());
 
@@ -749,14 +750,13 @@ mod tests {
         .unwrap();
 
         // Verify bookmark exists
-        let exists: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM bookmarks WHERE user_id = $1 AND video_id = $2",
-        )
-        .bind(user_id)
-        .bind(video_id)
-        .fetch_optional(pool)
-        .await
-        .unwrap();
+        let exists: Option<Uuid> =
+            sqlx::query_scalar("SELECT id FROM bookmarks WHERE user_id = $1 AND video_id = $2")
+                .bind(user_id)
+                .bind(video_id)
+                .fetch_optional(pool)
+                .await
+                .unwrap();
 
         assert!(exists.is_some());
 
@@ -769,14 +769,13 @@ mod tests {
             .unwrap();
 
         // Verify bookmark removed
-        let exists: Option<Uuid> = sqlx::query_scalar(
-            "SELECT id FROM bookmarks WHERE user_id = $1 AND video_id = $2",
-        )
-        .bind(user_id)
-        .bind(video_id)
-        .fetch_optional(pool)
-        .await
-        .unwrap();
+        let exists: Option<Uuid> =
+            sqlx::query_scalar("SELECT id FROM bookmarks WHERE user_id = $1 AND video_id = $2")
+                .bind(user_id)
+                .bind(video_id)
+                .fetch_optional(pool)
+                .await
+                .unwrap();
 
         assert!(exists.is_none());
     }
@@ -967,7 +966,11 @@ mod tests {
     }
 
     // Test helper that mimics the real merge_and_shuffle logic
-    fn merge_and_shuffle_test(mut collab: Vec<i32>, mut pop: Vec<i32>, mut inter: Vec<i32>) -> Vec<i32> {
+    fn merge_and_shuffle_test(
+        mut collab: Vec<i32>,
+        mut pop: Vec<i32>,
+        mut inter: Vec<i32>,
+    ) -> Vec<i32> {
         let mut result = Vec::new();
         let collab_weight = 4;
         let pop_weight = 3;

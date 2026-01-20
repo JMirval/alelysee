@@ -1,10 +1,14 @@
-use dioxus::prelude::*;
 use api::types::{ContentTargetType, Video};
+use dioxus::prelude::*;
 
 const VIDEO_FEED_CSS: Asset = asset!("/assets/styling/video_feed.css");
 
 #[component]
-fn VideoOverlay(video_id: String, initial_vote_score: i64, on_comment_click: EventHandler<()>) -> Element {
+fn VideoOverlay(
+    video_id: String,
+    initial_vote_score: i64,
+    on_comment_click: EventHandler<()>,
+) -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
 
@@ -276,8 +280,8 @@ pub fn VideoFeed(
     let token = id_token().unwrap_or_default();
 
     // State management
-    let mut current_index = use_signal(|| 0usize);
-    let mut videos = use_signal(|| Vec::<Video>::new());
+    let current_index = use_signal(|| 0usize);
+    let mut videos = use_signal(Vec::<Video>::new);
     let mut loading = use_signal(|| true);
     let mut error_msg = use_signal(|| None::<String>);
 

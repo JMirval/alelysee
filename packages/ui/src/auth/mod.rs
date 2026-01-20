@@ -778,7 +778,7 @@ fn BookmarksSection() -> Element {
     let id_token = use_context::<Signal<Option<String>>>();
     let token = id_token().unwrap_or_default();
 
-    let mut bookmarks = use_signal(|| Vec::<api::types::Video>::new());
+    let mut bookmarks = use_signal(Vec::<api::types::Video>::new);
     let mut loading = use_signal(|| true);
     let mut error_msg = use_signal(|| None::<String>);
     let offset = use_signal(|| 0i64);
