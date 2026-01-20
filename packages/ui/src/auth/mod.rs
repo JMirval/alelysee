@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 
 const AUTH_CSS: Asset = asset!("/assets/styling/auth.css");
 const FEED_CSS: Asset = asset!("/assets/styling/feed.css");
+const BOOKMARKS_CSS: Asset = asset!("/assets/styling/bookmarks.css");
 
 /// Provide a best-effort bootstrap that loads a saved id_token (if present)
 /// and stores it into the shared `Signal<Option<String>>` context.
@@ -697,6 +698,7 @@ pub fn MePage() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: AUTH_CSS }
         document::Link { rel: "stylesheet", href: FEED_CSS }
+        document::Link { rel: "stylesheet", href: BOOKMARKS_CSS }
 
         div { class: "auth_gate",
             h2 { {crate::t(lang, "me.title")} }
