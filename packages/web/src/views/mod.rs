@@ -45,3 +45,6 @@ pub use auth_reset_password::*;
 
 mod auth_reset_confirm;
 pub use auth_reset_confirm::*;
+
+mod videos;
+pub use videos::*;

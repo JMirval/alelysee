@@ -113,6 +113,14 @@ pub struct VoteState {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Bookmark {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub video_id: Uuid,
+    pub created_at: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Comment {
     pub id: Uuid,
     pub author_user_id: Uuid,

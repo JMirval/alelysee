@@ -70,6 +70,8 @@ pub async fn reset_db() -> Option<()> {
             activity,
             votes,
             comments,
+            video_views,
+            bookmarks,
             videos,
             program_items,
             programs,

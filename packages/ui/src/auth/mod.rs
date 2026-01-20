@@ -2,6 +2,7 @@ use dioxus::prelude::*;
 
 const AUTH_CSS: Asset = asset!("/assets/styling/auth.css");
 const FEED_CSS: Asset = asset!("/assets/styling/feed.css");
+const BOOKMARKS_CSS: Asset = asset!("/assets/styling/bookmarks.css");
 
 /// Provide a best-effort bootstrap that loads a saved id_token (if present)
 /// and stores it into the shared `Signal<Option<String>>` context.
@@ -697,6 +698,7 @@ pub fn MePage() -> Element {
     rsx! {
         document::Link { rel: "stylesheet", href: AUTH_CSS }
         document::Link { rel: "stylesheet", href: FEED_CSS }
+        document::Link { rel: "stylesheet", href: BOOKMARKS_CSS }
 
         div { class: "auth_gate",
             h2 { {crate::t(lang, "me.title")} }
@@ -736,7 +738,159 @@ pub fn MePage() -> Element {
         }
 
         if id_token().is_some() {
-            crate::ActivityFeed {}
+            ProfileTabs {}
+        }
+    }
+}
+
+#[component]
+fn ProfileTabs() -> Element {
+    let mut active_tab = use_signal(|| "activity");
+
+    rsx! {
+        div { class: "profile-tabs",
+            button {
+                class: if active_tab() == "activity" { "tab active" } else { "tab" },
+                onclick: move |_| active_tab.set("activity"),
+                "Activity"
+            }
+            button {
+                class: if active_tab() == "bookmarks" { "tab active" } else { "tab" },
+                onclick: move |_| active_tab.set("bookmarks"),
+                "Bookmarks"
+            }
+        }
+
+        match active_tab() {
+            "activity" => rsx! {
+                crate::ActivityFeed {}
+            },
+            "bookmarks" => rsx! {
+                BookmarksSection {}
+            },
+            _ => rsx! {}
+        }
+    }
+}
+
+#[component]
+fn BookmarksSection() -> Element {
+    let id_token = use_context::<Signal<Option<String>>>();
+    let token = id_token().unwrap_or_default();
+
+    let mut bookmarks = use_signal(Vec::<api::types::Video>::new);
+    let mut loading = use_signal(|| true);
+    let mut error_msg = use_signal(|| None::<String>);
+    let offset = use_signal(|| 0i64);
+
+    // Load bookmarks
+    use_effect(move || {
+        let token = token.clone();
+        spawn(async move {
+            loading.set(true);
+            match api::list_bookmarked_videos(token, 20, offset()).await {
+                Ok(vids) => {
+                    bookmarks.set(vids);
+                    loading.set(false);
+                }
+                Err(e) => {
+                    error_msg.set(Some(e.to_string()));
+                    loading.set(false);
+                }
+            }
+        });
+    });
+
+    rsx! {
+        div { class: "bookmarks-section",
+            h2 { "Bookmarked Videos ({bookmarks().len()})" }
+
+            if loading() {
+                p { "Loading bookmarks..." }
+            } else if let Some(err) = error_msg() {
+                p { class: "error", "Error: {err}" }
+            } else if bookmarks().is_empty() {
+                div { class: "empty-state",
+                    p { "You haven't bookmarked any videos yet" }
+                    p { class: "hint", "Discover videos to save your favorites" }
+                    a { href: "/videos", class: "btn primary", "Explore Videos" }
+                }
+            } else {
+                div { class: "bookmarks-grid",
+                    for video in bookmarks() {
+                        BookmarkCard {
+                            key: "{video.id}",
+                            video: video,
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn BookmarkCard(video: api::types::Video) -> Element {
+    let id_token = use_context::<Signal<Option<String>>>();
+    let token = id_token().unwrap_or_default();
+    let cfg = use_resource(|| async move { api::public_config().await });
+    let mut show_remove = use_signal(|| false);
+
+    let on_remove = move |_| {
+        let token = token.clone();
+        let video_id = video.id.to_string();
+        spawn(async move {
+            let _ = api::bookmark_video(token, video_id).await;
+            // TODO: Refresh bookmarks list
+        });
+    };
+
+    rsx! {
+        div {
+            class: "bookmark-card",
+            onmouseenter: move |_| show_remove.set(true),
+            onmouseleave: move |_| show_remove.set(false),
+
+            a { href: "/videos/{video.id}",
+                match cfg() {
+                    None => rsx! { div { class: "video-thumbnail", "Loading..." } },
+                    Some(Err(_)) => rsx! { div { class: "video-thumbnail", "Error" } },
+                    Some(Ok(cfg)) => {
+                        let src = cfg.media_base_url.as_ref().map(|base| {
+                            format!("{}/{}", base.trim_end_matches('/'), video.storage_key)
+                        });
+
+                        rsx! {
+                            if let Some(src) = src {
+                                video {
+                                    class: "video-thumbnail",
+                                    src: "{src}",
+                                    preload: "metadata",
+                                }
+                            } else {
+                                div { class: "video-thumbnail placeholder",
+                                    "▶️"
+                                }
+                            }
+                        }
+                    }
+                }
+
+                div { class: "video-info",
+                    div { class: "video-score", "{video.vote_score} votes" }
+                    if let Some(duration) = video.duration_seconds {
+                        div { class: "video-duration", "{duration}s" }
+                    }
+                }
+            }
+
+            if show_remove() {
+                button {
+                    class: "remove-btn",
+                    onclick: on_remove,
+                    "Remove"
+                }
+            }
         }
     }
 }

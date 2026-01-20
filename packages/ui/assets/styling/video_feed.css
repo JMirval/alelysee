@@ -1,0 +1,198 @@
+/* Video Feed Container */
+.video-feed-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    overflow: hidden;
+    z-index: 1000;
+}
+
+.video-feed-scroll {
+    width: 100%;
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+
+.video-feed-item {
+    width: 100%;
+    height: 100vh;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Video player */
+.video-feed-player {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Loading states */
+.video-feed-container .error {
+    color: white;
+    text-align: center;
+    padding: 20px;
+}
+
+/* Video Overlay Controls */
+.video-overlay {
+    position: absolute;
+    right: 16px;
+    bottom: 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 10;
+}
+
+.overlay-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.4);
+    border: none;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 28px;
+}
+
+.overlay-btn:hover {
+    background: rgba(0, 0, 0, 0.6);
+    transform: scale(1.1);
+}
+
+.overlay-btn.active {
+    background: rgba(255, 0, 0, 0.6);
+    transform: scale(1.05);
+}
+
+.btn-icon {
+    font-size: 28px;
+    line-height: 1;
+}
+
+.btn-count {
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+/* Video Metadata */
+.video-metadata {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 80px; /* Leave space for overlay buttons */
+    padding: 24px;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+    color: white;
+    z-index: 5;
+}
+
+.metadata-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin: 0 0 8px 0;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.metadata-author {
+    font-size: 14px;
+    margin: 0 0 8px 0;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.metadata-link {
+    font-size: 14px;
+    color: #4a9eff;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.metadata-link:hover {
+    color: #6bb3ff;
+}
+
+/* Comment Panel */
+.comment-panel-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    display: none;
+}
+
+.comment-panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 70vh;
+    background: #1a1a1a;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    z-index: 101;
+    display: flex;
+    flex-direction: column;
+}
+
+.comment-panel.open {
+    transform: translateY(0);
+}
+
+.comment-panel.open ~ .comment-panel-backdrop {
+    display: block;
+}
+
+.comment-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #333;
+}
+
+.comment-panel-header h3 {
+    margin: 0;
+    color: white;
+    font-size: 18px;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+}
+
+.comment-panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+}
