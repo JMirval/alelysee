@@ -225,9 +225,19 @@ pub async fn list_feed_videos(
         let interactive_videos = get_interactive_videos(user_id, pool).await?;
 
         // Phase 4: Merge and shuffle with weights
-        let feed = merge_and_shuffle(collaborative_videos, popular_videos, interactive_videos);
+        let mut feed = merge_and_shuffle(collaborative_videos, popular_videos, interactive_videos);
 
-        // TODO: Phase 5: Check if feed is empty and reset views
+        // Phase 5: Check if feed is empty (all videos exhausted) and reset
+        if feed.is_empty() {
+            info!("video_feed.list_feed_videos: all videos exhausted, resetting views");
+            reset_viewed_videos(user_id, pool).await?;
+
+            // Retry once after reset
+            let collaborative_videos = get_collaborative_videos(user_id, pool).await?;
+            let popular_videos = get_popular_videos(user_id, pool).await?;
+            let interactive_videos = get_interactive_videos(user_id, pool).await?;
+            feed = merge_and_shuffle(collaborative_videos, popular_videos, interactive_videos);
+        }
 
         // Phase 6: Apply pagination
         let total = feed.len();
@@ -496,6 +506,22 @@ fn merge_and_shuffle(
     }
 
     result
+}
+
+#[cfg(feature = "server")]
+async fn reset_viewed_videos(
+    user_id: uuid::Uuid,
+    pool: &sqlx::Pool<sqlx::Any>,
+) -> Result<(), ServerFnError> {
+    info!("video_feed: resetting view history for user_id={}", user_id);
+
+    sqlx::query("delete from video_views where user_id = $1")
+        .bind(crate::db::uuid_to_db(user_id))
+        .execute(pool)
+        .await
+        .map_err(|e| ServerFnError::new(e.to_string()))?;
+
+    Ok(())
 }
 
 #[cfg(feature = "server")]
